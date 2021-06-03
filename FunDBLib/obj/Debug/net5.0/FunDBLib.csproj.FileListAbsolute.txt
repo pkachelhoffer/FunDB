@@ -1,0 +1,12 @@
+C:\Git\FunDB\FunDBLib\bin\Debug\net5.0\FunDBLib.deps.json
+C:\Git\FunDB\FunDBLib\bin\Debug\net5.0\FunDBLib.dll
+C:\Git\FunDB\FunDBLib\bin\Debug\net5.0\ref\FunDBLib.dll
+C:\Git\FunDB\FunDBLib\bin\Debug\net5.0\FunDBLib.pdb
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.csprojAssemblyReference.cache
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.GeneratedMSBuildEditorConfig.editorconfig
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.AssemblyInfoInputs.cache
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.AssemblyInfo.cs
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.csproj.CoreCompileInputs.cache
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.dll
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\ref\FunDBLib.dll
+C:\Git\FunDB\FunDBLib\obj\Debug\net5.0\FunDBLib.pdb
