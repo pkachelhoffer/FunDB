@@ -9,8 +9,16 @@ namespace FunDB
     {
         static void Main(string[] args)
         {
-            Write();
-            var records = Read();
+            // Write();
+            // var records = Read();
+
+            StartDB();
+        }
+
+        private static void StartDB()
+        {
+            FunPOSDatabase db = new FunPOSDatabase();
+            db.Initialise();
         }
 
         private static void Write()
