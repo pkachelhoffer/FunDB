@@ -34,5 +34,13 @@ namespace FunDBLib
 
             Initialised = true;
         }
+
+        public TDataContext GetDataContext<TDataContext>()
+            where TDataContext : FDDataContext, new()
+        {
+            TDataContext dataContext = new TDataContext();
+            dataContext.Initialise(Path);
+            return dataContext;
+        }
     }
 }

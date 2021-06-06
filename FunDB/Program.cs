@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using FunDB.Database;
 
 namespace FunDB
 {
@@ -19,6 +20,11 @@ namespace FunDB
         {
             FunPOSDatabase db = new FunPOSDatabase();
             db.Initialise();
+
+            var dataContext = db.GetDataContext<TestDataContext>();
+            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 24, 1567.56m));
+
+            dataContext.Customer.Submit();
         }
 
         private static void Write()

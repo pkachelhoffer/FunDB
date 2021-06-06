@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FunDBLib
+namespace FunDBLib.Attributes
 {
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
     public class FDTableAttribute : Attribute
