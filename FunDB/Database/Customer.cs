@@ -1,5 +1,6 @@
 using System;
 using FunDBLib;
+using FunDBLib.Attributes;
 
 namespace FunDB.Database
 {
@@ -7,6 +8,7 @@ namespace FunDB.Database
     {
         public int CustomerID { get; set; }
 
+        [FDColumnText(50)]
         public string Name { get; set; }
 
         public string Surname { get; set; }
@@ -28,7 +30,5 @@ namespace FunDB.Database
             Age = age;
             BankBalance = bankBalance;
         }
-
-
     }
 }

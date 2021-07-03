@@ -33,38 +33,39 @@ namespace FunDBLib
             return new decimal(bits);
         }
 
-        internal static MetaFieldData Serialize(object? valueNullable)
+        internal static byte[] Serialize(object? valueNullable, byte length)
         {
             if (valueNullable == null)
-                return new MetaFieldData(0, new byte[0]);
+                return new byte[length];
             else
             {
+                byte[] convertedBytes;
+
                 var value = (object)valueNullable;
 
                 if (value is int)
-                    return Serialize((int)value);
+                     convertedBytes = BitConverter.GetBytes((int)value);
                 else if (value is string)
-                    return Serialize((string)value);
+                    convertedBytes = Encoding.UTF8.GetBytes((string)value);
                 else if (value is decimal)
-                    return Serialize((decimal)value);
+                    convertedBytes = Serialize((decimal)value);
                 else
                     throw new Exception($"Type {value.GetType().Name} not supported");
+
+                if (convertedBytes == null)
+                    throw new Exception("Converting field to bytes failed");
+
+                if (convertedBytes.Length > length)
+                    convertedBytes = TrimBytes(convertedBytes, length);
+
+                byte[] finalBytes = new byte[length];
+                convertedBytes.CopyTo(finalBytes, length - convertedBytes.Length);
+
+                return finalBytes;
             }
         }
 
-        internal static MetaFieldData Serialize(int value)
-        {
-            var bytes = BitConverter.GetBytes(value);
-            return new MetaFieldData((byte)bytes.Length, bytes);
-        }
-
-        internal static MetaFieldData Serialize(string value)
-        {
-            var bytes = Encoding.UTF8.GetBytes(value);
-            return new MetaFieldData((byte)bytes.Length, bytes);
-        }
-
-        internal static MetaFieldData Serialize(decimal value)
+        internal static byte[] Serialize(decimal value)
         {
             byte[] bytes = new byte[16];
 
@@ -91,27 +92,17 @@ namespace FunDBLib
             bytes[14] = (byte)(flags >> 0x10);
             bytes[15] = (byte)(flags >> 0x18);
 
-            return new MetaFieldData((byte)bytes.Length, bytes);
+            return bytes;
         }
 
-        internal static byte[] Serialize(MetaFieldData[] fields)
+        private static byte[] TrimBytes(byte[] inputBytes, int length)
         {
-            int length = 0;
-            foreach (var field in fields)
-                length += field.Contents.Length + 1;
+            byte[] newBytes = new byte[length];
 
-            byte[] output = new byte[length];
+            for (int x = 0; x < length; x++)
+                newBytes[x] = inputBytes[x];
 
-            int index = 0;
-            foreach (var field in fields)
-            {
-                output[index] = field.Length;
-                index++;
-                field.Contents.CopyTo(output, index);
-                index += field.Contents.Length;
-            }
-
-            return output;
+            return newBytes;
         }
     }
 }

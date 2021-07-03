@@ -22,7 +22,7 @@ namespace FunDBLib
 
     public class FDTable<TTableDefinition> : FDTable
     {
-        private Dictionary<string, MetaField> FieldDictionary { get; set; }
+        private TableMetaData TableMetaData { get; set; }
 
         private Type RowType { get; set; }
 
@@ -34,7 +34,7 @@ namespace FunDBLib
 
             RowType = typeof(TTableDefinition);
 
-            FieldDictionary = PopulateMetaFieldDictionary();
+            TableMetaData = new TableMetaData(typeof(TTableDefinition));
         }
 
         protected override string GetTableName()
@@ -67,60 +67,23 @@ namespace FunDBLib
 
         private void AddRowToTable(TTableDefinition row)
         {
-            List<MetaFieldData> fieldDataEntries = new List<MetaFieldData>();
+            byte[] rowBytes = new byte[TableMetaData.RowLengthBytes];
+            int byteIndex = 0;
 
-            foreach (var field in FieldDictionary)
+            foreach (var field in TableMetaData.Fields)
             {
-                var fieldData = BinaryHelper.Serialize(field.Value.Property.GetValue(row));
-                fieldDataEntries.Add(fieldData);
+                var fieldBytes = BinaryHelper.Serialize(field.Property.GetValue(row), field.ByteLength);
+                fieldBytes.CopyTo(rowBytes, byteIndex);
+                byteIndex += field.ByteLength;
             }
-
-            var bytesValues = BinaryHelper.Serialize(fieldDataEntries.ToArray());
 
             using(var sr = new FileStream(DataPath, FileMode.Create))
-            {
-                byte[] length = BitConverter.GetBytes(bytesValues.Length);
-                var bytesLine = new byte[length.Length + bytesValues.Length];
-
-                length.CopyTo(bytesLine, 0);
-                bytesValues.CopyTo(bytesLine, length.Length);
-
-                sr.Write(bytesLine, 0, bytesLine.Length);
-            }
+                sr.Write(rowBytes, 0, rowBytes.Length);
         }
 
         private IEnumerable<TTableDefinition> Read()
         {
             return null;
-        }
-
-        private static Dictionary<string, MetaField> PopulateMetaFieldDictionary()
-        {
-            Dictionary<string, MetaField> fieldDictionary = new Dictionary<string, MetaField>();
-
-            var definitionType = typeof(TTableDefinition);
-
-            foreach (var property in definitionType.GetProperties())
-            {
-                var attributes = property.GetCustomAttributes(false);
-                
-                bool ignore = false;
-
-                foreach (var attribute in attributes)
-                    if (attribute is FDIgnoreAttribute)
-                    {
-                        ignore = true;
-                        break;
-                    }
-
-                if (ignore)
-                    continue;
-
-                MetaField metaField = new MetaField(property.Name, property.PropertyType, property);
-                fieldDictionary.Add(metaField.Name, metaField);
-            }
-
-            return fieldDictionary;
         }
     }
 }

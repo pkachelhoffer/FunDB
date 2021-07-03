@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using FunDB.Database;
 
 namespace FunDB
@@ -22,7 +23,7 @@ namespace FunDB
             db.Initialise();
 
             var dataContext = db.GetDataContext<TestDataContext>();
-            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 24, 1567.56m));
+            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 0, 1567.56m));
 
             dataContext.Customer.Submit();
         }
