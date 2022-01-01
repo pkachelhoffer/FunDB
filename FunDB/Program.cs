@@ -21,11 +21,19 @@ namespace FunDB
         {
             FunPOSDatabase db = new FunPOSDatabase();
             db.Initialise();
-
             var dataContext = db.GetDataContext<TestDataContext>();
-            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 0, 1567.56m));
 
+            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 0, 1567.56m));
             dataContext.Customer.Submit();
+
+            using (var reader = dataContext.Customer.GetReader())
+            {
+                while (reader.ReadLine(out Customer customer))
+                {
+
+                }
+            }
+            
         }
 
         private static void Write()

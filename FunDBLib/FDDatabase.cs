@@ -11,7 +11,7 @@ namespace FunDBLib
 
         public FDDatabase()
         {
-            Initialised = false;
+            
         }
 
         /// <summary>

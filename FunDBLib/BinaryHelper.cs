@@ -19,7 +19,11 @@ namespace FunDBLib
 
         public static string DeserializeString(byte[] content)
         {
-            return Encoding.UTF8.GetString(content);
+            byte[] stringLengthBytes = content.FDCopyArray(0, 4);
+            int stringLength = DeserializeInt(stringLengthBytes);
+
+            byte[] stringBytes = content.FDCopyArray(4, stringLength);
+            return Encoding.UTF8.GetString(stringBytes);
         }
 
         public static decimal DeserializeDecimal(byte[] content)
@@ -44,9 +48,9 @@ namespace FunDBLib
                 var value = (object)valueNullable;
 
                 if (value is int)
-                     convertedBytes = BitConverter.GetBytes((int)value);
+                    convertedBytes = BitConverter.GetBytes((int)value);
                 else if (value is string)
-                    convertedBytes = Encoding.UTF8.GetBytes((string)value);
+                    convertedBytes = SerializeString((string)value);
                 else if (value is decimal)
                     convertedBytes = Serialize((decimal)value);
                 else
@@ -59,10 +63,25 @@ namespace FunDBLib
                     convertedBytes = TrimBytes(convertedBytes, length);
 
                 byte[] finalBytes = new byte[length];
-                convertedBytes.CopyTo(finalBytes, length - convertedBytes.Length);
+                convertedBytes.CopyTo(finalBytes, 0);
 
                 return finalBytes;
             }
+        }
+
+        private static byte[] SerializeString(string stringValue)
+        {
+            byte[] stringBytes = Encoding.UTF8.GetBytes(stringValue);
+            byte[] lengthBytes = BitConverter.GetBytes(stringBytes.Length);
+            byte[] convertedBytes = new byte[stringBytes.Length + lengthBytes.Length];
+
+            for (int x = 0; x < lengthBytes.Length; x++)
+                convertedBytes[x] = lengthBytes[x];
+
+            for (int x = 0; x < stringBytes.Length; x++)
+                convertedBytes[x + lengthBytes.Length] = stringBytes[x];
+
+            return convertedBytes;
         }
 
         internal static byte[] Serialize(decimal value)
@@ -93,6 +112,19 @@ namespace FunDBLib
             bytes[15] = (byte)(flags >> 0x18);
 
             return bytes;
+        }
+
+        internal static byte[] FDCopyArray(this byte[] fromArray, int startIndex, int length)
+        {
+            byte[] outArray = new byte[length];
+            int index = 0;
+            for (int x = startIndex; x < startIndex + length; x++)
+            {
+                outArray[index] = fromArray[x];
+                index++;
+            }
+
+            return outArray;
         }
 
         private static byte[] TrimBytes(byte[] inputBytes, int length)

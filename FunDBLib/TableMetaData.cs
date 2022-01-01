@@ -50,9 +50,9 @@ namespace FunDBLib
 
                 byte byteLength = 0;
                 if (columnText != null)
-                    byteLength = (byte)(columnText.CharacterLength * 2); // Two bytes per character
+                    byteLength = (byte)((columnText.CharacterLength * 2) + 4); // Two bytes per character plus 4 bytes for length
                 else if (property.PropertyType == typeof(int))
-                    byteLength = (byte)BitConverter.GetBytes(int.MaxValue).Length;
+                    byteLength = 4;
                 else if (property.PropertyType == typeof(decimal))
                     byteLength = (byte)BinaryHelper.Serialize(decimal.MaxValue).Length;
                 else

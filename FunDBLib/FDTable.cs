@@ -1,15 +1,15 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using FunDBLib.Attributes;
 
 namespace FunDBLib
 {
     public abstract class FDTable
     {
-        protected string DataPath { get; private set; }
+        internal string DataPath { get; private set; }
+
+        internal TableMetaData TableMetaData { get; set; }
 
         internal void SetDataPath(string basePath)
         {
@@ -21,9 +21,8 @@ namespace FunDBLib
     }
 
     public class FDTable<TTableDefinition> : FDTable
+        where TTableDefinition : class, new()
     {
-        private TableMetaData TableMetaData { get; set; }
-
         private Type RowType { get; set; }
 
         private List<(TTableDefinition Row, RowAction RowAction)> RowActions { get; set; }
@@ -77,13 +76,13 @@ namespace FunDBLib
                 byteIndex += field.ByteLength;
             }
 
-            using(var sr = new FileStream(DataPath, FileMode.Create))
+            using (var sr = new FileStream(DataPath, FileMode.Create))
                 sr.Write(rowBytes, 0, rowBytes.Length);
         }
 
-        private IEnumerable<TTableDefinition> Read()
+        public FDDataReader<TTableDefinition> GetReader()
         {
-            return null;
+            return new FDDataReader<TTableDefinition>(this);
         }
     }
 }
