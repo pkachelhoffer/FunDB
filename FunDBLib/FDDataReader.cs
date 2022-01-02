@@ -42,12 +42,14 @@ namespace FunDBLib
             {
                 var fieldBytes = row.FDCopyArray(index, field.ByteLength);
 
-                if (field.FieldType == typeof(int))
+                if (field.FieldType == EnumFieldTypes.Int)
                     field.Property.SetValue(tableRow, BinaryHelper.DeserializeInt(fieldBytes));
-                else if (field.FieldType == typeof(decimal))
+                else if (field.FieldType == EnumFieldTypes.Decimal)
                     field.Property.SetValue(tableRow, BinaryHelper.DeserializeDecimal(fieldBytes));
-                else if (field.FieldType == typeof(string))
+                else if (field.FieldType == EnumFieldTypes.String)
                     field.Property.SetValue(tableRow, BinaryHelper.DeserializeString(fieldBytes));
+                else if (field.FieldType == EnumFieldTypes.Byte)
+                    field.Property.SetValue(tableRow, fieldBytes[0]);
 
                 index += field.ByteLength;
             }

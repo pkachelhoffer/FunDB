@@ -47,12 +47,14 @@ namespace FunDBLib
 
                 var value = (object)valueNullable;
 
-                if (value is int)
+                if (value is int || value.GetType().IsEnum)
                     convertedBytes = BitConverter.GetBytes((int)value);
                 else if (value is string)
                     convertedBytes = SerializeString((string)value);
                 else if (value is decimal)
                     convertedBytes = Serialize((decimal)value);
+                else if (value is byte)
+                    convertedBytes = new byte[1] { (byte)value };
                 else
                     throw new Exception($"Type {value.GetType().Name} not supported");
 

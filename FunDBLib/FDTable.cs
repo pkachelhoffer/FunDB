@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using FunDBLib.Attributes;
+using FunDBLib.MetaData;
 
 namespace FunDBLib
 {
@@ -18,6 +19,8 @@ namespace FunDBLib
         }
 
         protected abstract string GetTableName();
+
+        internal abstract Type GetRowType();
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -48,6 +51,11 @@ namespace FunDBLib
                     tableName = (customAttribute as FDTableAttribute).TableName;
 
             return tableName;
+        }
+
+        internal override Type GetRowType()
+        {
+            return RowType;
         }
 
         public void Add(TTableDefinition row)
