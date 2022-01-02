@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using FunDBLib.Attributes;
 
-namespace FunDBLib
+namespace FunDBLib.MetaData
 {
     internal class TableMetaData
     {
@@ -12,8 +12,12 @@ namespace FunDBLib
 
         public IEnumerable<MetaField> Fields { get { return FieldDictionary.Values; } }
 
+        private Type TableType { get; set; }
+
         public TableMetaData(Type tableType)
         {
+            TableType = tableType;
+
             Parse(tableType);
         }
 
@@ -55,14 +59,43 @@ namespace FunDBLib
                     byteLength = 4;
                 else if (property.PropertyType == typeof(decimal))
                     byteLength = (byte)BinaryHelper.Serialize(decimal.MaxValue).Length;
+                else if (property.PropertyType.IsEnum)
+                    byteLength = 4;
+                else if (property.PropertyType == typeof(byte))
+                    byteLength = 1;
                 else
                     throw new Exception($"Field type {property.PropertyType} not supported. Use FDIgnore to exclude property.");
 
-                MetaField metaField = new MetaField(property.Name, property.PropertyType, property, byteLength);
+                MetaField metaField = new MetaField(property.Name, ParseType(property.PropertyType), property, byteLength);
                 FieldDictionary.Add(metaField.Name, metaField);
 
                 RowLengthBytes += byteLength;
             }
         }
+
+        private EnumFieldTypes ParseType(Type type)
+        {
+            if (type == typeof(int))
+                return EnumFieldTypes.Int;
+            else if (type == typeof(decimal))
+                return EnumFieldTypes.Decimal;
+            else if (type == typeof(string))
+                return EnumFieldTypes.String;
+            else if (type.IsEnum)
+                return EnumFieldTypes.Enum;
+            else if (type == typeof(byte))
+                return EnumFieldTypes.Byte;
+            else
+                throw new Exception($"Invalid field type: {type}");
+        }
+
+        // private void SaveTableMetaData()
+        // {
+        //     MetaFieldTable metaTable = new MetaFieldTable(TableType);
+        //     foreach (var field in FieldDictionary.Values)
+        //         metaTable.Add(field);
+
+        //     metaTable.Submit();
+        // }
     }
 }

@@ -22,6 +22,7 @@ namespace FunDB
             FunPOSDatabase db = new FunPOSDatabase();
             db.Initialise();
             var dataContext = db.GetDataContext<TestDataContext>();
+            dataContext.Migrate();
 
             dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 0, 1567.56m));
             dataContext.Customer.Submit();

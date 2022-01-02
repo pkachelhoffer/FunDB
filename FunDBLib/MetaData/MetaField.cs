@@ -1,19 +1,26 @@
 using System;
 using System.Reflection;
+using FunDBLib.Attributes;
 
-namespace FunDBLib
+namespace FunDBLib.MetaData
 {
-    internal struct MetaField
+    internal class MetaField 
     {
         public string Name { get; set; }
 
-        public Type FieldType { get; set; }
+        public EnumFieldTypes FieldType { get; set; }
 
+        [FDIgnore]
         public PropertyInfo Property { get; set; }
 
         public byte ByteLength { get; set; }
         
-        public MetaField(string name, Type fieldType, PropertyInfo property, byte byteLength)
+        public MetaField()
+        {
+            
+        }
+
+        public MetaField(string name, EnumFieldTypes fieldType, PropertyInfo property, byte byteLength)
         {
             Name = name;
             FieldType = fieldType;

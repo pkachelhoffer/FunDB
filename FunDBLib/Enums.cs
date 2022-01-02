@@ -9,4 +9,14 @@ namespace FunDBLib
         Update = 2,
         Delete = 3
     }
+
+        public enum EnumFieldTypes
+    {
+        None = 0,
+        Int = 1,
+        Decimal = 2,
+        String = 3,
+        Enum = 4,
+        Byte = 5
+    }
 }
