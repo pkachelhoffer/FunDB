@@ -37,10 +37,10 @@ namespace FunDBLib
             return new decimal(bits);
         }
 
-        internal static byte[] Serialize(object? valueNullable, byte length)
+        internal static byte[] Serialize(object? valueNullable)
         {
             if (valueNullable == null)
-                return new byte[length];
+                return new byte[0];
             else
             {
                 byte[] convertedBytes;
@@ -61,13 +61,7 @@ namespace FunDBLib
                 if (convertedBytes == null)
                     throw new Exception("Converting field to bytes failed");
 
-                if (convertedBytes.Length > length)
-                    convertedBytes = TrimBytes(convertedBytes, length);
-
-                byte[] finalBytes = new byte[length];
-                convertedBytes.CopyTo(finalBytes, 0);
-
-                return finalBytes;
+                return convertedBytes;
             }
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using FunDBLib.MetaData;
 
@@ -7,15 +8,34 @@ namespace FunDBLib
 {
     public abstract class FDDataContext
     {
-        internal string DataPath { get; set; }
+        private static object InitialiseLock = new object();
 
         private IEnumerable<FDTable> Tables { get; set; }
 
-        internal void Initialise(string path)
+        private static bool Initialised { get; set; }
+        private static string DataPath { get; set; }
+
+        public FDDataContext()
         {
-            DataPath = path;
+            if (!Initialised)
+                lock (InitialiseLock)
+                    if (!Initialised)
+                        Initialise();
+
             InstantiateTables();
         }
+
+        private void Initialise()
+        {
+            DataPath = GetDataPath();
+
+            if (!Directory.Exists(DataPath))
+                Directory.CreateDirectory(DataPath);
+
+            Initialised = true;
+        }
+
+        public abstract string GetDataPath();
 
         private void InstantiateTables()
         {
@@ -34,19 +54,6 @@ namespace FunDBLib
             }
 
             Tables = tables;
-        }
-
-        public void Migrate()
-        {
-            foreach (var table in Tables)
-            {
-                MetaFieldTable metaTable = new MetaFieldTable(table.GetRowType());
-                metaTable.SetDataPath(DataPath);
-                foreach (var field in table.TableMetaData.Fields)
-                    metaTable.Add(field);
-
-                metaTable.Submit();
-            }
         }
     }
 }

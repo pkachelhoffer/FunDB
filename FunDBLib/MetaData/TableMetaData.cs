@@ -8,8 +8,6 @@ namespace FunDBLib.MetaData
     {
         private Dictionary<string, MetaField> FieldDictionary { get; set; }
 
-        public int RowLengthBytes { get; private set; }
-
         public IEnumerable<MetaField> Fields { get { return FieldDictionary.Values; } }
 
         private Type TableType { get; set; }
@@ -24,8 +22,6 @@ namespace FunDBLib.MetaData
         private void Parse(Type tableType)
         {
             FieldDictionary = new Dictionary<string, MetaField>();
-
-            RowLengthBytes = 0;
 
             foreach (var property in tableType.GetProperties())
             {
@@ -52,24 +48,12 @@ namespace FunDBLib.MetaData
                 if (ignore)
                     continue;
 
-                byte byteLength = 0;
+                byte length = 0;
                 if (columnText != null)
-                    byteLength = (byte)((columnText.CharacterLength * 2) + 4); // Two bytes per character plus 4 bytes for length
-                else if (property.PropertyType == typeof(int))
-                    byteLength = 4;
-                else if (property.PropertyType == typeof(decimal))
-                    byteLength = (byte)BinaryHelper.Serialize(decimal.MaxValue).Length;
-                else if (property.PropertyType.IsEnum)
-                    byteLength = 4;
-                else if (property.PropertyType == typeof(byte))
-                    byteLength = 1;
-                else
-                    throw new Exception($"Field type {property.PropertyType} not supported. Use FDIgnore to exclude property.");
+                    length = (byte)columnText.CharacterLength;
 
-                MetaField metaField = new MetaField(property.Name, ParseType(property.PropertyType), property, byteLength);
+                MetaField metaField = new MetaField(property.Name, ParseType(property.PropertyType), property, length);
                 FieldDictionary.Add(metaField.Name, metaField);
-
-                RowLengthBytes += byteLength;
             }
         }
 
@@ -88,14 +72,5 @@ namespace FunDBLib.MetaData
             else
                 throw new Exception($"Invalid field type: {type}");
         }
-
-        // private void SaveTableMetaData()
-        // {
-        //     MetaFieldTable metaTable = new MetaFieldTable(TableType);
-        //     foreach (var field in FieldDictionary.Values)
-        //         metaTable.Add(field);
-
-        //     metaTable.Submit();
-        // }
     }
 }

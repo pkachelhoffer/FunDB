@@ -6,90 +6,36 @@ using FunDB.Database;
 
 namespace FunDB
 {
-    // this is a test change
     class Program
     {
         static void Main(string[] args)
         {
-            // Write();
-            // var records = Read();
-
             StartDB();
         }
 
         private static void StartDB()
         {
-            FunPOSDatabase db = new FunPOSDatabase();
-            db.Initialise();
-            var dataContext = db.GetDataContext<TestDataContext>();
-            dataContext.Migrate();
+            var dataContext = new TestDataContext();
 
-            dataContext.Customer.Add(new Customer(1, "Piet", "Pompies", 0, 1567.56m));
-            dataContext.Customer.Submit();
+            WriteTestData();
 
             using (var reader = dataContext.Customer.GetReader())
             {
                 while (reader.ReadLine(out Customer customer))
                 {
-
-                }
-            }
-            
-        }
-
-        private static void Write()
-        {
-            List<TestRecord> records = new List<TestRecord>();
-            for (int x = 0; x < 100000; x++)
-            {
-                records.Add(new TestRecord($"Name{x}", $"Surname{x}", x % 100, x));
-            }
-            //var records = new TestRecord[]
-            //{
-            //    new TestRecord("Frank", "Smith", 29, 34.34m),
-            //    new TestRecord("Steve", "Hackney", 56, 10534.95m),
-            //    new TestRecord("Sam", "Stout", 36, 9945.34m)
-            //};
-
-            using (var sr = new FileStream("SomeFile.dat", FileMode.Create))
-            {
-                foreach (var record in records)
-                {
-                    var bytesValues = record.SerializeLine();
-                    byte[] length = BitConverter.GetBytes(bytesValues.Length);
-                    var bytesLine = new byte[length.Length + bytesValues.Length];
-
-                    length.CopyTo(bytesLine, 0);
-                    bytesValues.CopyTo(bytesLine, length.Length);
-
-                    sr.Write(bytesLine, 0, bytesLine.Length);
+                    Console.WriteLine($"Hello {customer.Name}, balance is {customer.BankBalance}");
                 }
             }
         }
 
-        private static List<TestRecord> Read()
+        private static void WriteTestData()
         {
-            List<TestRecord> records = new List<TestRecord>();
+            var dataContext = new TestDataContext();
 
-            using (var sr = new StreamReader("SomeFile.dat"))
-            {
-                while (sr.BaseStream.Position < sr.BaseStream.Length)
-                {
-                    byte[] bytesLength = new byte[4];
-                    sr.BaseStream.Read(bytesLength, 0, bytesLength.Length);
+            for (int x = 1; x < 1000000; x++)
+                dataContext.Customer.Add(new Customer(x, $"Customer {x}", $"Van Tonder {x}", x, 2000 - x));
 
-                    int length = BitConverter.ToInt32(bytesLength);
-                    byte[] bytesValues = new byte[length];
-                    sr.BaseStream.Read(bytesValues, 0, length);
-
-                    var record = new TestRecord();
-                    record.Deserialise(bytesValues);
-
-                    records.Add(record);
-                }
-            }
-
-            return records;
+            dataContext.Customer.Submit();
         }
     }
 }

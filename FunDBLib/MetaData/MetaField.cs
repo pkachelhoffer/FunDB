@@ -10,22 +10,21 @@ namespace FunDBLib.MetaData
 
         public EnumFieldTypes FieldType { get; set; }
 
-        [FDIgnore]
         public PropertyInfo Property { get; set; }
 
-        public byte ByteLength { get; set; }
+        public byte Length { get; set; }
         
         public MetaField()
         {
             
         }
 
-        public MetaField(string name, EnumFieldTypes fieldType, PropertyInfo property, byte byteLength)
+        public MetaField(string name, EnumFieldTypes fieldType, PropertyInfo property, byte length)
         {
             Name = name;
             FieldType = fieldType;
             Property = property;
-            ByteLength = byteLength;
+            Length = length;
         }
     }
 }

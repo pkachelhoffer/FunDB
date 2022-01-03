@@ -65,27 +65,42 @@ namespace FunDBLib
 
         public void Submit()
         {
-            foreach (var rowAction in RowActions)
+            using (var sr = new FileStream(DataPath, FileMode.Append))
             {
-                if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
-                    AddRowToTable(rowAction.Row);
+                foreach (var rowAction in RowActions)
+                {
+                    if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
+                        AddRowToTable(rowAction.Row, sr);
+                }
             }
         }
 
-        private void AddRowToTable(TTableDefinition row)
+        private void AddRowToTable(TTableDefinition row, FileStream fileStream)
         {
-            byte[] rowBytes = new byte[TableMetaData.RowLengthBytes];
-            int byteIndex = 0;
+            byte[] rowBytes = new byte[0];
 
             foreach (var field in TableMetaData.Fields)
             {
-                var fieldBytes = BinaryHelper.Serialize(field.Property.GetValue(row), field.ByteLength);
-                fieldBytes.CopyTo(rowBytes, byteIndex);
-                byteIndex += field.ByteLength;
+                var fieldValue = field.Property.GetValue(row);
+                if (field.FieldType == EnumFieldTypes.String && fieldValue != null)
+                {
+                    string fieldValueString = (string)fieldValue;
+                    if (fieldValueString.Length > field.Length)
+                        fieldValueString = fieldValueString.Substring(0, field.Length);
+                    fieldValue = fieldValueString;
+                }
+
+                var fieldBytes = BinaryHelper.Serialize(fieldValue);
+                byte[] fieldBytesLength = new byte[1] { (byte)fieldBytes.Length };
+                byte[] newRow = new byte[rowBytes.Length + fieldBytes.Length + 1];
+                rowBytes.CopyTo(newRow, 0);
+                fieldBytesLength.CopyTo(newRow, rowBytes.Length);
+                fieldBytes.CopyTo(newRow, rowBytes.Length + 1);
+
+                rowBytes = newRow;
             }
 
-            using (var sr = new FileStream(DataPath, FileMode.Create))
-                sr.Write(rowBytes, 0, rowBytes.Length);
+            fileStream.Write(rowBytes, 0, rowBytes.Length);
         }
 
         public FDDataReader<TTableDefinition> GetReader()
