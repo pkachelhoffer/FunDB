@@ -17,6 +17,16 @@ namespace FunDBLib
             }
         }
 
+        public static long DeserializeLong(byte[] content)
+        {
+            using (var ms = new MemoryStream(content))
+            using (var br = new BinaryReader(ms))
+            {
+                var bytes = br.ReadBytes(content.Length);
+                return BitConverter.ToInt64(bytes);
+            }
+        }
+
         public static string DeserializeString(byte[] content)
         {
             byte[] stringLengthBytes = content.FDCopyArray(0, 4);
@@ -49,6 +59,8 @@ namespace FunDBLib
 
                 if (value is int || value.GetType().IsEnum)
                     convertedBytes = BitConverter.GetBytes((int)value);
+                else if (value is long)
+                    convertedBytes = BitConverter.GetBytes((long)value);
                 else if (value is string)
                     convertedBytes = SerializeString((string)value);
                 else if (value is decimal)

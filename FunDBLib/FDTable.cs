@@ -8,6 +8,8 @@ namespace FunDBLib
 {
     public abstract class FDTable
     {
+        protected long Counter { get; set; }
+
         internal string DataPath { get; private set; }
 
         internal TableMetaData TableMetaData { get; set; }
@@ -65,42 +67,38 @@ namespace FunDBLib
 
         public void Submit()
         {
-            using (var sr = new FileStream(DataPath, FileMode.Append))
+            long lastRecordAddress = 0;
+            long nextRecordAddress = 0;
+            DataRecord<TTableDefinition> prevRecord = null;
+
+            using (var fileStream = new FileStream(DataPath, FileMode.Append))
             {
                 foreach (var rowAction in RowActions)
                 {
                     if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
-                        AddRowToTable(rowAction.Row, sr);
+                    {
+                        nextRecordAddress = fileStream.Position;
+                        if (prevRecord != null)
+                        {
+                            fileStream.Position = lastRecordAddress;
+                            prevRecord.NextAddress = nextRecordAddress;
+                            DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
+                            fileStream.Position = nextRecordAddress;
+                        }
+                        
+                        var record = new DataRecord<TTableDefinition>(lastRecordAddress, 0, rowAction.Row);
+                        lastRecordAddress = fileStream.Position;
+                        DataRecordParser.WriteRecord(fileStream, TableMetaData, record);
+
+                        prevRecord = record;
+                    }
                 }
             }
         }
 
-        private void AddRowToTable(TTableDefinition row, FileStream fileStream)
+        private void Seek(FileStream fileStream, long address)
         {
-            byte[] rowBytes = new byte[0];
-
-            foreach (var field in TableMetaData.Fields)
-            {
-                var fieldValue = field.Property.GetValue(row);
-                if (field.FieldType == EnumFieldTypes.String && fieldValue != null)
-                {
-                    string fieldValueString = (string)fieldValue;
-                    if (fieldValueString.Length > field.Length)
-                        fieldValueString = fieldValueString.Substring(0, field.Length);
-                    fieldValue = fieldValueString;
-                }
-
-                var fieldBytes = BinaryHelper.Serialize(fieldValue);
-                byte[] fieldBytesLength = new byte[1] { (byte)fieldBytes.Length };
-                byte[] newRow = new byte[rowBytes.Length + fieldBytes.Length + 1];
-                rowBytes.CopyTo(newRow, 0);
-                fieldBytesLength.CopyTo(newRow, rowBytes.Length);
-                fieldBytes.CopyTo(newRow, rowBytes.Length + 1);
-
-                rowBytes = newRow;
-            }
-
-            fileStream.Write(rowBytes, 0, rowBytes.Length);
+            fileStream.Position = address;
         }
 
         public FDDataReader<TTableDefinition> GetReader()

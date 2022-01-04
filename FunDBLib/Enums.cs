@@ -17,6 +17,7 @@ namespace FunDBLib
         Decimal = 2,
         String = 3,
         Enum = 4,
-        Byte = 5
+        Byte = 5,
+        Long = 6
     }
 }

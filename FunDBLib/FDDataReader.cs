@@ -25,24 +25,25 @@ namespace FunDBLib
 
             bool dataFound = false;
 
+            var rowID = ReadField(FileStream, EnumFieldTypes.Long, out bool found);
+            if (!found)
+            {
+                row = null;
+                return false;
+            }
+
             foreach (var field in Table.TableMetaData.Fields)
             {
-                byte[] fieldLengthByte = new byte[1];
-                var bytesRead = FileStream.Read(fieldLengthByte, 0, fieldLengthByte.Length);
-                if (bytesRead > 0)
+                var fieldValue = ReadField(FileStream, field.FieldType, out found);
+                if (found)
                 {
-                    byte[] fieldValueBytes = new byte[fieldLengthByte[0]];
-                    FileStream.Read(fieldValueBytes, 0, fieldValueBytes.Length);
-
-                    var fieldValue = Deserialize(field, fieldValueBytes);
                     field.Property.SetValue(row, fieldValue);
-
                     dataFound = true;
                 }
                 else
                 {
-                    row = null;
                     dataFound = false;
+                    row = null;
                     break;
                 }
             }
@@ -50,18 +51,42 @@ namespace FunDBLib
             return dataFound;
         }
 
-        private object Deserialize(MetaData.MetaField field, byte[] fieldBytes)
+        private object ReadField(FileStream fileStream, EnumFieldTypes fieldType, out bool found)
         {
-            if (field.FieldType == EnumFieldTypes.Int)
-                return BinaryHelper.DeserializeInt(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.Decimal)
-                return BinaryHelper.DeserializeDecimal(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.String)
-                return BinaryHelper.DeserializeString(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.Byte)
-                return fieldBytes[0];
+            found = false;
+
+            byte[] fieldLengthByte = new byte[1];
+            var bytesRead = FileStream.Read(fieldLengthByte, 0, fieldLengthByte.Length);
+            if (bytesRead > 0)
+            {
+                found = true;
+
+                byte[] fieldValueBytes = new byte[fieldLengthByte[0]];
+                FileStream.Read(fieldValueBytes, 0, fieldValueBytes.Length);
+
+                return Deserialize(fieldType, fieldValueBytes);
+            }
             else
-                throw new Exception($"Field type not implemented: {field.FieldType}");
+            {
+                found = false;
+                return null;
+            }
+        }
+
+        private object Deserialize(EnumFieldTypes fieldType, byte[] fieldBytes)
+        {
+            if (fieldType == EnumFieldTypes.Int)
+                return BinaryHelper.DeserializeInt(fieldBytes);
+            else if (fieldType == EnumFieldTypes.Decimal)
+                return BinaryHelper.DeserializeDecimal(fieldBytes);
+            else if (fieldType == EnumFieldTypes.String)
+                return BinaryHelper.DeserializeString(fieldBytes);
+            else if (fieldType == EnumFieldTypes.Byte)
+                return fieldBytes[0];
+            else if (fieldType == EnumFieldTypes.Long)
+                return BinaryHelper.DeserializeLong(fieldBytes);
+            else
+                throw new Exception($"Field type not implemented: {fieldType}");
         }
 
         public void Dispose()
