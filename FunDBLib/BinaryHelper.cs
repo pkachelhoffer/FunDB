@@ -9,42 +9,62 @@ namespace FunDBLib
     {
         public static int DeserializeInt(byte[] content)
         {
-            using (var ms = new MemoryStream(content))
-            using (var br = new BinaryReader(ms))
+            if (content.Length > 0)
             {
-                var bytes = br.ReadBytes(content.Length);
-                return BitConverter.ToInt32(bytes);
+                using (var ms = new MemoryStream(content))
+                using (var br = new BinaryReader(ms))
+                {
+                    var bytes = br.ReadBytes(content.Length);
+                    return BitConverter.ToInt32(bytes);
+                }
             }
+            else
+                return default(int);
         }
 
         public static long DeserializeLong(byte[] content)
         {
-            using (var ms = new MemoryStream(content))
-            using (var br = new BinaryReader(ms))
+            if (content.Length > 0)
             {
-                var bytes = br.ReadBytes(content.Length);
-                return BitConverter.ToInt64(bytes);
+                using (var ms = new MemoryStream(content))
+                using (var br = new BinaryReader(ms))
+                {
+                    var bytes = br.ReadBytes(content.Length);
+                    return BitConverter.ToInt64(bytes);
+                }
             }
+            else
+                return default(long);
         }
 
-        public static string DeserializeString(byte[] content)
+        public static string? DeserializeString(byte[] content)
         {
             byte[] stringLengthBytes = content.FDCopyArray(0, 4);
             int stringLength = DeserializeInt(stringLengthBytes);
-
-            byte[] stringBytes = content.FDCopyArray(4, stringLength);
-            return Encoding.UTF8.GetString(stringBytes);
+            
+            if (stringLength > 0)
+            {
+                byte[] stringBytes = content.FDCopyArray(4, stringLength);
+                return Encoding.UTF8.GetString(stringBytes);
+            }
+            else
+                return null;
         }
 
         public static decimal DeserializeDecimal(byte[] content)
         {
-            int[] bits = new int[4];
-            bits[0] = ((content[0] | (content[1] << 8)) | (content[2] << 0x10)) | (content[3] << 0x18); //lo
-            bits[1] = ((content[4] | (content[5] << 8)) | (content[6] << 0x10)) | (content[7] << 0x18); //mid
-            bits[2] = ((content[8] | (content[9] << 8)) | (content[10] << 0x10)) | (content[11] << 0x18); //hi
-            bits[3] = ((content[12] | (content[13] << 8)) | (content[14] << 0x10)) | (content[15] << 0x18); //flags
+            if (content.Length > 0)
+            {
+                int[] bits = new int[4];
+                bits[0] = ((content[0] | (content[1] << 8)) | (content[2] << 0x10)) | (content[3] << 0x18); //lo
+                bits[1] = ((content[4] | (content[5] << 8)) | (content[6] << 0x10)) | (content[7] << 0x18); //mid
+                bits[2] = ((content[8] | (content[9] << 8)) | (content[10] << 0x10)) | (content[11] << 0x18); //hi
+                bits[3] = ((content[12] | (content[13] << 8)) | (content[14] << 0x10)) | (content[15] << 0x18); //flags
 
-            return new decimal(bits);
+                return new decimal(bits);
+            }
+            else
+                return default(decimal);
         }
 
         internal static byte[] Serialize(object? valueNullable)
@@ -64,7 +84,7 @@ namespace FunDBLib
                 else if (value is string)
                     convertedBytes = SerializeString((string)value);
                 else if (value is decimal)
-                    convertedBytes = Serialize((decimal)value);
+                    convertedBytes = SerializeDecimal((decimal)value);
                 else if (value is byte)
                     convertedBytes = new byte[1] { (byte)value };
                 else
@@ -92,7 +112,7 @@ namespace FunDBLib
             return convertedBytes;
         }
 
-        internal static byte[] Serialize(decimal value)
+        private static byte[] SerializeDecimal(decimal value)
         {
             byte[] bytes = new byte[16];
 

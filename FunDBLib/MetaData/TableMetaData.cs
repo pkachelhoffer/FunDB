@@ -69,6 +69,8 @@ namespace FunDBLib.MetaData
                 return EnumFieldTypes.Enum;
             else if (type == typeof(byte))
                 return EnumFieldTypes.Byte;
+            else if (type == typeof(long))
+                return EnumFieldTypes.Long;
             else
                 throw new Exception($"Invalid field type: {type}");
         }

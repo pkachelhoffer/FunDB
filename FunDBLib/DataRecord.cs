@@ -4,20 +4,32 @@ using FunDBLib.MetaData;
 
 namespace FunDBLib
 {
-    internal class DataRecord<TRecord>
-        where TRecord : class, new()
-        
+    internal class DataRecord
     {
         public long PrevAddress { get; set; }
         public long NextAddress { get; set; }
 
-        public TRecord Record { get; private set; }
+        public DataRecord()
+        {
+            
+        }
 
-        internal DataRecord(long prevAddress, long nextAddress, TRecord record)
+        public DataRecord(long prevAddress, long nextAddress)
         {
             PrevAddress = prevAddress;
             NextAddress = nextAddress;
-            Record = record;
+        }
+    }
+
+    internal class DataRecord<TRecord> : DataRecord
+        where TRecord : class, new()
+        
+    {
+        public TRecord Row { get; private set; }
+
+        internal DataRecord(long prevAddress, long nextAddress, TRecord row) : base(prevAddress, nextAddress)
+        {
+            Row = row;
         }
     }
 }

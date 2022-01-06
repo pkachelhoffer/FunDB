@@ -11,11 +11,10 @@ namespace FunDBLib
         {
             WriteRecordAddress(fileStream, dataRecord);
 
-            AddRowToTable(fileStream, tableMetaData, dataRecord.Record);
+            WriteRow(fileStream, tableMetaData, dataRecord.Row);
         }
 
-        internal static void WriteRecordAddress<TRecord>(FileStream fileStream, DataRecord<TRecord> dataRecord)
-            where TRecord : class, new()
+        internal static void WriteRecordAddress(FileStream fileStream, DataRecord dataRecord)
         {
             byte[] prevAddressBytes = BinaryHelper.Serialize(dataRecord.PrevAddress);
             fileStream.Write(prevAddressBytes, 0, prevAddressBytes.Length);
@@ -24,7 +23,7 @@ namespace FunDBLib
             fileStream.Write(nextAddressBytes, 0, nextAddressBytes.Length);
         }
 
-        private static void AddRowToTable<TRecord>(FileStream fileStream, TableMetaData tableMetaData, TRecord record)
+        internal static void WriteRow<TRecord>(FileStream fileStream, TableMetaData tableMetaData, TRecord record)
             where TRecord : class, new()
         {
             byte[] rowBytes = new byte[0];
@@ -61,6 +60,15 @@ namespace FunDBLib
         internal static DataRecord<TRecord> ReadRecord<TRecord>(FileStream fileStream, TableMetaData tableMetaData)
             where TRecord : class, new()
         {
+            var dataRecord = ReadRecord(fileStream);
+
+            var record = ReadRow<TRecord>(fileStream, tableMetaData);
+
+            return new DataRecord<TRecord>(dataRecord.PrevAddress, dataRecord.NextAddress, record);
+        }
+
+        internal static DataRecord ReadRecord(FileStream fileStream)
+        {
             byte[] prevAddressBytes = new byte[8];
             fileStream.Read(prevAddressBytes, 0, prevAddressBytes.Length);
             long prevAddress = BinaryHelper.DeserializeLong(prevAddressBytes);
@@ -69,6 +77,12 @@ namespace FunDBLib
             fileStream.Read(nextAddressBytes, 0, nextAddressBytes.Length);
             long nextAddress = BinaryHelper.DeserializeLong(nextAddressBytes);
 
+            return new DataRecord(prevAddress, nextAddress);
+        }
+
+        internal static TRecord ReadRow<TRecord>(FileStream fileStream, TableMetaData tableMetaData)
+            where TRecord : class, new()
+        {
             TRecord record = new TRecord();
 
             foreach (var field in tableMetaData.Fields)
@@ -77,7 +91,7 @@ namespace FunDBLib
                 field.Property.SetValue(record, fieldValue);
             }
 
-            return new DataRecord<TRecord>(prevAddress, nextAddress, record);
+            return record;
         }
 
         private static object ReadField(FileStream fileStream, EnumFieldTypes fieldType)

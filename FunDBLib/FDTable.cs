@@ -14,15 +14,41 @@ namespace FunDBLib
 
         internal TableMetaData TableMetaData { get; set; }
 
-        internal void SetDataPath(string basePath)
+        internal HeaderData HeaderData { get; set; }
+        private TableMetaData HeaderMetaData { get; set; }
+
+        internal void Initialise(string basePath)
         {
             string fileName = $"fdb_{GetTableName()}.dat";
             DataPath = Path.Combine(basePath, fileName);
+
+            HeaderMetaData = new TableMetaData(typeof(HeaderData));
+
+            if (!File.Exists(DataPath))
+                CreateTable();
+
+            ReadHeaderData();
+        }
+
+        private void CreateTable()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.CreateNew))
+                DataRecordParser.WriteRow(fileStream, HeaderMetaData, new HeaderData());
+        }
+
+        protected void ReadHeaderData()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
+                HeaderData = DataRecordParser.ReadRow<HeaderData>(fileStream, HeaderMetaData);
+        }
+
+        protected void SaveHeaderData()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
+                DataRecordParser.WriteRow(fileStream, HeaderMetaData, HeaderData);
         }
 
         protected abstract string GetTableName();
-
-        internal abstract Type GetRowType();
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -55,11 +81,6 @@ namespace FunDBLib
             return tableName;
         }
 
-        internal override Type GetRowType()
-        {
-            return RowType;
-        }
-
         public void Add(TTableDefinition row)
         {
             RowActions.Add((row, new RowAction(EnumRowActionType.Add)));
@@ -67,33 +88,51 @@ namespace FunDBLib
 
         public void Submit()
         {
-            long lastRecordAddress = 0;
-            long nextRecordAddress = 0;
-            DataRecord<TTableDefinition> prevRecord = null;
-
-            using (var fileStream = new FileStream(DataPath, FileMode.Append))
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
             {
                 foreach (var rowAction in RowActions)
                 {
                     if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
                     {
-                        nextRecordAddress = fileStream.Position;
-                        if (prevRecord != null)
-                        {
-                            fileStream.Position = lastRecordAddress;
-                            prevRecord.NextAddress = nextRecordAddress;
-                            DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
-                            fileStream.Position = nextRecordAddress;
-                        }
-                        
-                        var record = new DataRecord<TTableDefinition>(lastRecordAddress, 0, rowAction.Row);
-                        lastRecordAddress = fileStream.Position;
-                        DataRecordParser.WriteRecord(fileStream, TableMetaData, record);
-
-                        prevRecord = record;
+                        InsertData(fileStream, rowAction.Row);
                     }
                 }
             }
+
+            SaveHeaderData();
+        }
+
+        private void InsertData(FileStream fileStream, TTableDefinition row)
+        {
+            var dataRecord = new DataRecord<TTableDefinition>(0, 0, row);
+
+            fileStream.Seek(0, SeekOrigin.End);
+
+            if (HeaderData.FirstRecordPosition == 0)
+                HeaderData.FirstRecordPosition = fileStream.Position;
+            else
+            {
+                long nextAddress = fileStream.Position;
+                long prevAddress = HeaderData.LastRecordPosition;
+
+                UpdatePreviousRecordNextAddress(fileStream, prevAddress, nextAddress);
+
+                dataRecord.PrevAddress = HeaderData.LastRecordPosition;
+
+                fileStream.Position = nextAddress;
+            }
+
+            HeaderData.LastRecordPosition = fileStream.Position;
+
+            DataRecordParser.WriteRecord(fileStream, TableMetaData, dataRecord);
+        }
+
+        private void UpdatePreviousRecordNextAddress(FileStream fileStream, long prevAddress, long nextAddress)
+        {
+            fileStream.Position = prevAddress;
+            var prevRecord = DataRecordParser.ReadRecord(fileStream);
+            prevRecord.NextAddress = nextAddress;
+            DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
         }
 
         private void Seek(FileStream fileStream, long address)
@@ -103,6 +142,7 @@ namespace FunDBLib
 
         public FDDataReader<TTableDefinition> GetReader()
         {
+            ReadHeaderData();
             return new FDDataReader<TTableDefinition>(this);
         }
     }

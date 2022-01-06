@@ -46,7 +46,7 @@ namespace FunDBLib
                 if (property.PropertyType.IsAssignableTo(typeof(FDTable)))
                 {
                     var instance = Activator.CreateInstance(property.PropertyType) as FDTable;
-                    instance.SetDataPath(DataPath);
+                    instance.Initialise(DataPath);
                     property.SetValue(this, instance);
 
                     tables.Add(instance);
