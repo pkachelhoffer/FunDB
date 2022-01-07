@@ -2,19 +2,19 @@ namespace FunDBLib
 {
     public class HeaderData
     {
-        public long LastRecordPosition { get; set; }
-
         public long FirstRecordPosition { get; set; }
+
+        public long LastRecordPosition { get; set; }
 
         public HeaderData()
         {
             
         }
 
-        public HeaderData(long lastRecordPosition, long firstRecordPosition)
+        public HeaderData(long firstRecordPosition, long lastRecordPosition)
         {
-            LastRecordPosition = lastRecordPosition;
             FirstRecordPosition = firstRecordPosition;
+            LastRecordPosition = lastRecordPosition;
         }
     }
 }

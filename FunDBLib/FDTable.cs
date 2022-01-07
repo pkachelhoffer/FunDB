@@ -132,6 +132,7 @@ namespace FunDBLib
             fileStream.Position = prevAddress;
             var prevRecord = DataRecordParser.ReadRecord(fileStream);
             prevRecord.NextAddress = nextAddress;
+            fileStream.Position = prevAddress;
             DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
         }
 
