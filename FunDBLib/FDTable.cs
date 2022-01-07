@@ -2,20 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using FunDBLib.Attributes;
+using FunDBLib.Index;
 using FunDBLib.MetaData;
 
 namespace FunDBLib
 {
     public abstract class FDTable
     {
-        protected long Counter { get; set; }
-
         internal string DataPath { get; private set; }
 
         internal TableMetaData TableMetaData { get; set; }
 
         internal HeaderData HeaderData { get; set; }
         private TableMetaData HeaderMetaData { get; set; }
+
+        private List<FDIndex> Indexes { get; set; }
+
+        public FDTable()
+        {
+            Indexes = new List<FDIndex>();
+        }
 
         internal void Initialise(string basePath)
         {
@@ -48,7 +54,12 @@ namespace FunDBLib
                 DataRecordParser.WriteRow(fileStream, HeaderMetaData, HeaderData);
         }
 
-        protected abstract string GetTableName();
+        internal abstract string GetTableName();
+
+        public void AddIndex()
+        {
+
+        }
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -67,7 +78,7 @@ namespace FunDBLib
             TableMetaData = new TableMetaData(typeof(TTableDefinition));
         }
 
-        protected override string GetTableName()
+        internal override string GetTableName()
         {
             var definitionType = typeof(TTableDefinition);
 
