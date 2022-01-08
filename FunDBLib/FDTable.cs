@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq.Expressions;
 using FunDBLib.Attributes;
 using FunDBLib.Index;
 using FunDBLib.MetaData;
@@ -15,13 +16,6 @@ namespace FunDBLib
 
         internal HeaderData HeaderData { get; set; }
         private TableMetaData HeaderMetaData { get; set; }
-
-        private List<FDIndex> Indexes { get; set; }
-
-        public FDTable()
-        {
-            Indexes = new List<FDIndex>();
-        }
 
         internal void Initialise(string basePath)
         {
@@ -55,11 +49,6 @@ namespace FunDBLib
         }
 
         internal abstract string GetTableName();
-
-        public void AddIndex()
-        {
-
-        }
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -69,6 +58,8 @@ namespace FunDBLib
 
         private List<(TTableDefinition Row, RowAction RowAction)> RowActions { get; set; }
 
+        private List<FDIndex<TTableDefinition>> Indexes { get; set; }
+
         public FDTable()
         {
             RowActions = new List<(TTableDefinition, RowAction)>();
@@ -76,6 +67,8 @@ namespace FunDBLib
             RowType = typeof(TTableDefinition);
 
             TableMetaData = new TableMetaData(typeof(TTableDefinition));
+
+            Indexes = new List<FDIndex<TTableDefinition>>();
         }
 
         internal override string GetTableName()
@@ -92,6 +85,13 @@ namespace FunDBLib
             return tableName;
         }
 
+        public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
+        {
+            var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
+
+            Indexes.Add(index);
+        }
+
         public void Add(TTableDefinition row)
         {
             RowActions.Add((row, new RowAction(EnumRowActionType.Add)));
@@ -105,7 +105,8 @@ namespace FunDBLib
                 {
                     if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
                     {
-                        InsertData(fileStream, rowAction.Row);
+                        InsertData(fileStream, rowAction.Row, out long address);
+                        MaintainIndexes(rowAction.Row, address);
                     }
                 }
             }
@@ -113,7 +114,7 @@ namespace FunDBLib
             SaveHeaderData();
         }
 
-        private void InsertData(FileStream fileStream, TTableDefinition row)
+        private void InsertData(FileStream fileStream, TTableDefinition row, out long address)
         {
             var dataRecord = new DataRecord<TTableDefinition>(0, 0, row);
 
@@ -134,8 +135,17 @@ namespace FunDBLib
             }
 
             HeaderData.LastRecordPosition = fileStream.Position;
+            address = fileStream.Position;
 
             DataRecordParser.WriteRecord(fileStream, TableMetaData, dataRecord);
+        }
+
+        private void MaintainIndexes(TTableDefinition row, long address)
+        {
+            foreach(var index in Indexes)
+            {
+                index.MaintainIndex(row, address);
+            }
         }
 
         private void UpdatePreviousRecordNextAddress(FileStream fileStream, long prevAddress, long nextAddress)
@@ -145,11 +155,6 @@ namespace FunDBLib
             prevRecord.NextAddress = nextAddress;
             fileStream.Position = prevAddress;
             DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
-        }
-
-        private void Seek(FileStream fileStream, long address)
-        {
-            fileStream.Position = address;
         }
 
         public FDDataReader<TTableDefinition> GetReader()

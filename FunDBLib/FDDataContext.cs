@@ -23,6 +23,8 @@ namespace FunDBLib
                         Initialise();
 
             InstantiateTables();
+
+            OnModelCreated();
         }
 
         private void Initialise()
@@ -54,6 +56,11 @@ namespace FunDBLib
             }
 
             Tables = tables;
+        }
+
+        protected virtual void OnModelCreated()
+        {
+
         }
     }
 }
