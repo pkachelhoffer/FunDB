@@ -14,6 +14,8 @@ namespace FunDBLibTest
             CreateDB();
 
             InsertData();
+
+            UpdateData();
         }
 
         private void CreateDB()
@@ -23,6 +25,39 @@ namespace FunDBLibTest
             Assert.IsTrue(Directory.Exists(TestDataContext.ConstDataPath), "DB directory not created");
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable.dat")), "DB file not created");
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "TestTable_PK.idx")), "PK index file not created");
+        }
+
+        private void UpdateData()
+        {
+            TestDataContext context = new TestDataContext();
+
+            string newDescription = "This row is updated. Deal with it";
+
+            using (var reader = context.TestTable.GetReader())
+                while (reader.ReadLine(out TestTable row))
+                {
+                    if (row.TestTableID == 2)
+                    {
+                        row.RowDescription = newDescription;
+                        context.TestTable.Update(row);
+                    }
+                }
+            
+            context.TestTable.Submit();
+
+            bool found = false;
+
+            using (var reader = context.TestTable.GetReader())
+                while (reader.ReadLine(out TestTable row))
+                {
+                    if (row.TestTableID == 2)
+                    {
+                        Assert.AreEqual(newDescription, row.RowDescription);
+                        found = true;
+                    }
+                }
+
+            Assert.AreEqual(true, found, "Updated row not found");
         }
 
         private void InsertData()

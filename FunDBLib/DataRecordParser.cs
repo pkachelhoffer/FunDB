@@ -29,30 +29,17 @@ namespace FunDBLib
             byte[] rowBytes = new byte[0];
 
             foreach (var field in tableMetaData.Fields)
-            {
-                var fieldValue = field.Property.GetValue(record);
-                if (field.FieldType == EnumFieldTypes.String && fieldValue != null)
-                {
-                    string fieldValueString = (string)fieldValue;
-                    if (fieldValueString.Length > field.Length)
-                        fieldValueString = fieldValueString.Substring(0, field.Length);
-                    fieldValue = fieldValueString;
-                }
-
-                rowBytes = AddToRow(fieldValue, rowBytes);
-            }
+                rowBytes = AddToRow(field.Property.GetValue(record), field.Length, rowBytes);
 
             fileStream.Write(rowBytes, 0, rowBytes.Length);
         }
 
-        private static byte[] AddToRow(object fieldValue, byte[] rowBytes)
+        private static byte[] AddToRow(object fieldValue, int length, byte[] rowBytes)
         {
             var fieldBytes = BinaryHelper.Serialize(fieldValue);
-            byte[] fieldBytesLength = new byte[1] { (byte)fieldBytes.Length };
-            byte[] newRow = new byte[rowBytes.Length + fieldBytes.Length + 1];
+            byte[] newRow = new byte[rowBytes.Length + length];
             rowBytes.CopyTo(newRow, 0);
-            fieldBytesLength.CopyTo(newRow, rowBytes.Length);
-            fieldBytes.CopyTo(newRow, rowBytes.Length + 1);
+            fieldBytes.CopyTo(newRow, rowBytes.Length);
 
             return newRow;
         }
@@ -87,19 +74,16 @@ namespace FunDBLib
 
             foreach (var field in tableMetaData.Fields)
             {
-                var fieldValue = ReadField(fileStream, field.FieldType);
+                var fieldValue = ReadField(fileStream, field.Length, field.FieldType);
                 field.Property.SetValue(record, fieldValue);
             }
 
             return record;
         }
 
-        private static object ReadField(FileStream fileStream, EnumFieldTypes fieldType)
+        private static object ReadField(FileStream fileStream, int length, EnumFieldTypes fieldType)
         {
-            byte[] fieldLengthByte = new byte[1];
-            fileStream.Read(fieldLengthByte, 0, fieldLengthByte.Length);
-
-            byte[] fieldValueBytes = new byte[fieldLengthByte[0]];
+            byte[] fieldValueBytes = new byte[length];
             fileStream.Read(fieldValueBytes, 0, fieldValueBytes.Length);
 
             return Deserialize(fieldType, fieldValueBytes);

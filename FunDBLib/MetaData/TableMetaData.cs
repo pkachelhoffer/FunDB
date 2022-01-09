@@ -6,17 +6,34 @@ namespace FunDBLib.MetaData
 {
     internal class TableMetaData
     {
-        private Dictionary<string, MetaField> FieldDictionary { get; set; }
+        public Dictionary<string, MetaField> FieldDictionary { get; set; }
 
         public IEnumerable<MetaField> Fields { get { return FieldDictionary.Values; } }
 
         private Type TableType { get; set; }
 
+        public string PrimaryKey { get; private set; }
+
+        private Dictionary<EnumFieldTypes, int> TypeLengthDictionary { get; set; }
+
         public TableMetaData(Type tableType)
         {
             TableType = tableType;
 
+            InitialiseTypeLengths();
+
             Parse(tableType);
+        }
+
+        private void InitialiseTypeLengths()
+        {
+            TypeLengthDictionary = new Dictionary<EnumFieldTypes, int>();
+
+            TypeLengthDictionary.Add(EnumFieldTypes.Int, BinaryHelper.Serialize(default(int)).Length);
+            TypeLengthDictionary.Add(EnumFieldTypes.Decimal, BinaryHelper.Serialize(default(decimal)).Length);
+            TypeLengthDictionary.Add(EnumFieldTypes.Long, BinaryHelper.Serialize(default(long)).Length);
+            TypeLengthDictionary.Add(EnumFieldTypes.Enum, BinaryHelper.Serialize(default(int)).Length);
+            TypeLengthDictionary.Add(EnumFieldTypes.Byte, BinaryHelper.Serialize(default(byte)).Length);
         }
 
         private void Parse(Type tableType)
@@ -30,7 +47,7 @@ namespace FunDBLib.MetaData
                 bool ignore = false;
 
                 FDColumnTextAttribute columnText = null;
-                if (property.PropertyType == typeof(string) || property.PropertyType == typeof(char))
+                if (property.PropertyType == typeof(string))
                     columnText = new FDColumnTextAttribute();
 
                 foreach (var attribute in attributes)
@@ -41,18 +58,28 @@ namespace FunDBLib.MetaData
                         break;
                     }
 
-                    if (attribute is FDColumnTextAttribute)
-                        columnText = attribute as FDColumnTextAttribute;
+                    if (attribute is FDColumnTextAttribute textAttribute)
+                        columnText = textAttribute;
+
+                    if (attribute is FDPrimaryKeyAttribute pkAttribute)
+                        PrimaryKey = property.Name;
                 }
 
                 if (ignore)
                     continue;
 
-                byte length = 0;
-                if (columnText != null)
-                    length = (byte)columnText.CharacterLength;
+                var fieldType = ParseType(property.PropertyType);
 
-                MetaField metaField = new MetaField(property.Name, ParseType(property.PropertyType), property, length);
+                int length = 0;
+                if (columnText != null)
+                    length = (columnText.CharacterLength * 2) + 4; // Two bytes per character plus 4 bytes for length
+                else if (TypeLengthDictionary.ContainsKey(fieldType))
+                    length = TypeLengthDictionary[fieldType];
+                else
+                    throw new Exception($"Invalid field type: {fieldType}");
+                    
+
+                MetaField metaField = new MetaField(property.Name, fieldType, property, length);
                 FieldDictionary.Add(metaField.Name, metaField);
             }
         }

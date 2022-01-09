@@ -1,9 +1,11 @@
 using System.Collections.Generic;
+using FunDBLib.Attributes;
 
 namespace FunDBLibTest
 {
     public class TestTable
     {
+        [FDPrimaryKey]
         public int TestTableID { get; set; }
 
         public string RowDescription { get; set; }

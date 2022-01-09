@@ -19,7 +19,7 @@ namespace FunDBLibTest
 
         protected override void OnModelCreated()
         {
-            TestTable.AddIndex("PK", (s) => new { s.TestTableID });
+            
         }
     }
 }
