@@ -171,6 +171,7 @@ namespace FunDBLib
                 fileStream.Position = deleteRecord.PrevAddress;
                 prevRecord = DataRecordParser.ReadRecord(fileStream);
                 prevRecord.NextAddress = deleteRecord.NextAddress;
+                fileStream.Position = deleteRecord.PrevAddress;
                 DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
             }
 
@@ -180,6 +181,7 @@ namespace FunDBLib
                 fileStream.Position = deleteRecord.NextAddress;
                 nextRecord = DataRecordParser.ReadRecord(fileStream);
                 nextRecord.PrevAddress = deleteRecord.PrevAddress;
+                fileStream.Position = deleteRecord.NextAddress;
                 DataRecordParser.WriteRecordAddress(fileStream, nextRecord);
             }
 
