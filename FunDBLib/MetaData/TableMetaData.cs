@@ -78,7 +78,6 @@ namespace FunDBLib.MetaData
                 else
                     throw new Exception($"Invalid field type: {fieldType}");
                     
-
                 MetaField metaField = new MetaField(property.Name, fieldType, property, length);
                 FieldDictionary.Add(metaField.Name, metaField);
             }

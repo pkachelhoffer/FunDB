@@ -106,13 +106,37 @@ namespace FunDBLib
         {
             var primaryKey = TableMetaData.FieldDictionary[TableMetaData.PrimaryKey];
 
-            AddIndex("PK", s => 
-            {
-                return primaryKey.Property.GetValue(s);
-            });
+            if (primaryKey.FieldType == EnumFieldTypes.Int)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Long)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexLong() { PrimaryKey = (long)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.String)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexString() { PrimaryKey = (string)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Byte)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexByte() { PrimaryKey = (byte)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Enum)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                });
+            else
+                throw new Exception($"Primary key type {primaryKey.FieldType} not supported.");
         }
 
         public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
+            where TFDIndexDefinition : class, new()
         {
             var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
 
@@ -140,12 +164,16 @@ namespace FunDBLib
             {
                 foreach (var rowAction in RowActions)
                 {
+                    long address = 0;
+
                     if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
-                        InsertData(fileStream, rowAction.Row, out long address);
+                        InsertData(fileStream, rowAction.Row, out address);
                     else if (rowAction.RowAction.RowActionType == EnumRowActionType.Update)
-                        UpdateData(fileStream, rowAction.Row, out long address);
+                        UpdateData(fileStream, rowAction.Row, out address);
                     else if (rowAction.RowAction.RowActionType == EnumRowActionType.Delete)
-                        DeleteData(fileStream, rowAction.Row);
+                        DeleteData(fileStream, rowAction.Row, out address);
+
+                    MaintainIndexes(rowAction, address);
                 }
             }
 
@@ -154,13 +182,15 @@ namespace FunDBLib
             RowActions.Clear();
         }
 
-        private void DeleteData(FileStream fileStream, TTableDefinition row)
+        private void DeleteData(FileStream fileStream, TTableDefinition row, out long address)
         {
             if (!RecordReadTracker.ContainsRecord(row))
                 throw new Exception("Record is not tracked. Only records read from database may be updated.");
 
             fileStream.Position = RecordReadTracker.GetAddress(row);
             var deleteRecord = DataRecordParser.ReadRecord(fileStream);
+
+            address = fileStream.Position;
 
             DataRecord prevRecord = null;
             DataRecord nextRecord = null;
@@ -242,12 +272,10 @@ namespace FunDBLib
             DataRecordParser.WriteRecord(fileStream, TableMetaData, dataRecord);
         }
 
-        private void MaintainIndexes(TTableDefinition row, long address)
+        private void MaintainIndexes((TTableDefinition, RowAction) rowAction, long address)
         {
             foreach(var index in Indexes)
-            {
-                index.MaintainIndex(row, address);
-            }
+                index.MaintainIndex(rowAction.Item1, rowAction.Item2, address);
         }
 
         private void UpdatePreviousRecordNextAddress(FileStream fileStream, long prevAddress, long nextAddress)
