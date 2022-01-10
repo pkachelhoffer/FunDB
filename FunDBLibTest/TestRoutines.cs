@@ -16,6 +16,8 @@ namespace FunDBLibTest
             InsertData();
 
             UpdateData();
+
+            DeleteData();
         }
 
         private void CreateDB()
@@ -26,6 +28,39 @@ namespace FunDBLibTest
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable.dat")), "DB file not created");
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "TestTable_PK.idx")), "PK index file not created");
         }
+
+        private void DeleteData()
+        {
+            TestDataContext context = new TestDataContext();
+
+            var deleteRow = new TestTable(4, "Delete Row", 392932);
+
+            context.TestTable.Add(deleteRow);
+            context.TestTable.Submit();
+
+            bool found = false;
+            using (var reader = context.TestTable.GetReader())
+                while (reader.ReadLine(out TestTable row))
+                    if (row.TestTableID == deleteRow.TestTableID && row.RowDescription == deleteRow.RowDescription)
+                        found = true;
+
+            Assert.AreEqual(true, found, "Delete row not found");
+
+            using (var reader = context.TestTable.GetReader())
+                while (reader.ReadLine(out TestTable row))
+                    if (row.TestTableID == deleteRow.TestTableID)
+                        context.TestTable.Delete(row);
+
+            context.TestTable.Submit();
+
+            found = false;
+            using (var reader = context.TestTable.GetReader())
+                while (reader.ReadLine(out TestTable row))
+                    if (row.TestTableID == deleteRow.TestTableID && row.RowDescription == deleteRow.RowDescription)
+                        found = true;
+
+            Assert.AreEqual(false, found, "Delete row found when it should be deleted");
+        }   
 
         private void UpdateData()
         {

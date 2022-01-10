@@ -129,6 +129,11 @@ namespace FunDBLib
             RowActions.Add((row, new RowAction(EnumRowActionType.Update)));
         }
 
+        public void Delete(TTableDefinition row)
+        {
+            RowActions.Add((row, new RowAction(EnumRowActionType.Delete)));
+        }
+
         public void Submit()
         {
             using (var fileStream = new FileStream(DataPath, FileMode.Open))
@@ -139,10 +144,60 @@ namespace FunDBLib
                         InsertData(fileStream, rowAction.Row, out long address);
                     else if (rowAction.RowAction.RowActionType == EnumRowActionType.Update)
                         UpdateData(fileStream, rowAction.Row, out long address);
+                    else if (rowAction.RowAction.RowActionType == EnumRowActionType.Delete)
+                        DeleteData(fileStream, rowAction.Row);
                 }
             }
 
             SaveHeaderData();
+
+            RowActions.Clear();
+        }
+
+        private void DeleteData(FileStream fileStream, TTableDefinition row)
+        {
+            if (!RecordReadTracker.ContainsRecord(row))
+                throw new Exception("Record is not tracked. Only records read from database may be updated.");
+
+            fileStream.Position = RecordReadTracker.GetAddress(row);
+            var deleteRecord = DataRecordParser.ReadRecord(fileStream);
+
+            DataRecord prevRecord = null;
+            DataRecord nextRecord = null;
+
+            // Set previous record next address
+            if (deleteRecord.PrevAddress > 0)
+            {
+                fileStream.Position = deleteRecord.PrevAddress;
+                prevRecord = DataRecordParser.ReadRecord(fileStream);
+                prevRecord.NextAddress = deleteRecord.NextAddress;
+                DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
+            }
+
+            // Set next record previous address
+            if (deleteRecord.NextAddress > 0)
+            {
+                fileStream.Position = deleteRecord.NextAddress;
+                nextRecord = DataRecordParser.ReadRecord(fileStream);
+                nextRecord.PrevAddress = deleteRecord.PrevAddress;
+                DataRecordParser.WriteRecordAddress(fileStream, nextRecord);
+            }
+
+            if (prevRecord == null)
+            {
+                if (nextRecord != null)
+                    HeaderData.FirstRecordPosition = deleteRecord.NextAddress;
+                else
+                    HeaderData.FirstRecordPosition = 0;
+            }
+
+            if (nextRecord == null)
+            {
+                if (prevRecord != null)
+                    HeaderData.LastRecordPosition = deleteRecord.PrevAddress;
+                else
+                    HeaderData.LastRecordPosition = 0;
+            }
         }
 
         private void UpdateData(FileStream fileStream, TTableDefinition row, out long address)
