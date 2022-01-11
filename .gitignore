@@ -7,3 +7,5 @@
 /.vs
 /FunDBLib/obj
 /FunDBLib/bin
+/FunDBLibTest/obj
+/FunDBLibTest/bin

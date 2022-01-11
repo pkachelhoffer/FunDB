@@ -15,16 +15,16 @@ namespace FunDB
 
         private static void StartDB()
         {
-            var dataContext = new TestDataContext();
-
             WriteTestData();
 
+            var dataContext = new TestDataContext();
             using (var reader = dataContext.Customer.GetReader())
             {
                 while (reader.ReadLine(out Customer customer))
                 {
-                    Console.WriteLine($"Hello {customer.Name}, balance is {customer.BankBalance}");
+
                 }
+                    //Console.WriteLine($"Hello {customer.CustomerID} {customer.Name}");
             }
         }
 
@@ -32,8 +32,11 @@ namespace FunDB
         {
             var dataContext = new TestDataContext();
 
-            for (int x = 1; x < 1000000; x++)
-                dataContext.Customer.Add(new Customer(x, $"Customer {x}", $"Van Tonder {x}", x, 2000 - x));
+            dataContext.Customer.Add(new Customer(1231230, "Final Customer"));
+
+            //for (int x = 1; x < 1000000; x++)
+                //dataContext.Customer.Add(new Customer(x, $"Name {x}"));
+                //dataContext.Customer.Add(new Customer(x, $"Customer {x}", $"Van Tonder {x}", x, 2000 - x));
 
             dataContext.Customer.Submit();
         }

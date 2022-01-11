@@ -23,6 +23,8 @@ namespace FunDBLib
                         Initialise();
 
             InstantiateTables();
+
+            OnModelCreated();
         }
 
         private void Initialise()
@@ -46,7 +48,7 @@ namespace FunDBLib
                 if (property.PropertyType.IsAssignableTo(typeof(FDTable)))
                 {
                     var instance = Activator.CreateInstance(property.PropertyType) as FDTable;
-                    instance.SetDataPath(DataPath);
+                    instance.Initialise(DataPath);
                     property.SetValue(this, instance);
 
                     tables.Add(instance);
@@ -54,6 +56,11 @@ namespace FunDBLib
             }
 
             Tables = tables;
+        }
+
+        protected virtual void OnModelCreated()
+        {
+
         }
     }
 }

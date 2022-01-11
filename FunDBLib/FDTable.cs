@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq.Expressions;
 using FunDBLib.Attributes;
+using FunDBLib.Index;
 using FunDBLib.MetaData;
 
 namespace FunDBLib
@@ -12,15 +14,54 @@ namespace FunDBLib
 
         internal TableMetaData TableMetaData { get; set; }
 
-        internal void SetDataPath(string basePath)
+        internal HeaderData HeaderData { get; set; }
+        private TableMetaData HeaderMetaData { get; set; }
+
+        internal RecordReadTracker RecordReadTracker { get; set; }
+
+        public FDTable()
+        {
+            RecordReadTracker = new RecordReadTracker();
+        }
+
+        internal void Initialise(string basePath)
         {
             string fileName = $"fdb_{GetTableName()}.dat";
             DataPath = Path.Combine(basePath, fileName);
+
+            HeaderMetaData = new TableMetaData(typeof(HeaderData));
+
+            if (!File.Exists(DataPath))
+                CreateTable();
+
+            ReadHeaderData();
+
+            InitialiseTyped();
         }
 
-        protected abstract string GetTableName();
+        private void CreateTable()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.CreateNew))
+                DataRecordParser.WriteRow(fileStream, HeaderMetaData, new HeaderData());
+        }
 
-        internal abstract Type GetRowType();
+        protected void ReadHeaderData()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
+                HeaderData = DataRecordParser.ReadRow<HeaderData>(fileStream, HeaderMetaData);
+        }
+
+        protected void SaveHeaderData()
+        {
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
+                DataRecordParser.WriteRow(fileStream, HeaderMetaData, HeaderData);
+        }
+
+        internal abstract string GetTableName();
+
+        protected abstract void InitialiseTyped();
+
+
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -30,6 +71,8 @@ namespace FunDBLib
 
         private List<(TTableDefinition Row, RowAction RowAction)> RowActions { get; set; }
 
+        private List<FDIndex<TTableDefinition>> Indexes { get; set; }
+
         public FDTable()
         {
             RowActions = new List<(TTableDefinition, RowAction)>();
@@ -37,9 +80,17 @@ namespace FunDBLib
             RowType = typeof(TTableDefinition);
 
             TableMetaData = new TableMetaData(typeof(TTableDefinition));
+
+            Indexes = new List<FDIndex<TTableDefinition>>();
         }
 
-        protected override string GetTableName()
+        protected override sealed void InitialiseTyped()
+        {
+            if (TableMetaData.PrimaryKey != null)
+                ProcessPrimaryKey();
+        }
+
+        internal override string GetTableName()
         {
             var definitionType = typeof(TTableDefinition);
 
@@ -53,9 +104,55 @@ namespace FunDBLib
             return tableName;
         }
 
-        internal override Type GetRowType()
+        private void ProcessPrimaryKey()
         {
-            return RowType;
+            var primaryKey = TableMetaData.FieldDictionary[TableMetaData.PrimaryKey];
+
+            if (primaryKey.FieldType == EnumFieldTypes.Int)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Long)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexLong() { PrimaryKey = (long)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.String)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexString() { PrimaryKey = (string)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Byte)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexByte() { PrimaryKey = (byte)primaryKey.Property.GetValue(s)};
+                });
+            else if (primaryKey.FieldType == EnumFieldTypes.Enum)
+                AddIndex("PK", s => 
+                {
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                });
+            else
+                throw new Exception($"Primary key type {primaryKey.FieldType} not supported.");
+        }
+
+        public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
+            where TFDIndexDefinition : class, new()
+        {
+            var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
+
+            Indexes.Add(index);
+        }
+
+        internal FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
+            where TIndexDefinition : class, new()
+        {
+            foreach (var index in Indexes)
+                if (index.IndexDefinitionType == typeof(TIndexDefinition))
+                    return index as FDIndex<TTableDefinition, TIndexDefinition>;
+
+            throw new Exception($"Index for {typeof(TIndexDefinition)} not found");
         }
 
         public void Add(TTableDefinition row)
@@ -63,48 +160,143 @@ namespace FunDBLib
             RowActions.Add((row, new RowAction(EnumRowActionType.Add)));
         }
 
+        public void Update(TTableDefinition row)
+        {
+            RowActions.Add((row, new RowAction(EnumRowActionType.Update)));
+        }
+
+        public void Delete(TTableDefinition row)
+        {
+            RowActions.Add((row, new RowAction(EnumRowActionType.Delete)));
+        }
+
         public void Submit()
         {
-            using (var sr = new FileStream(DataPath, FileMode.Append))
+            using (var fileStream = new FileStream(DataPath, FileMode.Open))
+            using (var indexCollectionReader = new IndexCollectionReader<TTableDefinition>(Indexes))
             {
                 foreach (var rowAction in RowActions)
                 {
+                    long address = 0;
+
                     if (rowAction.RowAction.RowActionType == EnumRowActionType.Add)
-                        AddRowToTable(rowAction.Row, sr);
+                        InsertData(fileStream, rowAction.Row, out address);
+                    else if (rowAction.RowAction.RowActionType == EnumRowActionType.Update)
+                        UpdateData(fileStream, rowAction.Row, out address);
+                    else if (rowAction.RowAction.RowActionType == EnumRowActionType.Delete)
+                        DeleteData(fileStream, rowAction.Row, out address);
+
+                    indexCollectionReader.MaintainIndexes(rowAction.Row, rowAction.RowAction, address);
                 }
+            }
+
+            SaveHeaderData();
+
+            RowActions.Clear();
+        }
+
+        private void DeleteData(FileStream fileStream, TTableDefinition row, out long address)
+        {
+            if (!RecordReadTracker.ContainsRecord(row))
+                throw new Exception("Record is not tracked. Only records read from database may be updated.");
+
+            fileStream.Position = RecordReadTracker.GetAddress(row);
+            var deleteRecord = DataRecordParser.ReadRecord(fileStream);
+
+            address = fileStream.Position;
+
+            DataRecord prevRecord = null;
+            DataRecord nextRecord = null;
+
+            // Set previous record next address
+            if (deleteRecord.PrevAddress > 0)
+            {
+                fileStream.Position = deleteRecord.PrevAddress;
+                prevRecord = DataRecordParser.ReadRecord(fileStream);
+                prevRecord.NextAddress = deleteRecord.NextAddress;
+                fileStream.Position = deleteRecord.PrevAddress;
+                DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
+            }
+
+            // Set next record previous address
+            if (deleteRecord.NextAddress > 0)
+            {
+                fileStream.Position = deleteRecord.NextAddress;
+                nextRecord = DataRecordParser.ReadRecord(fileStream);
+                nextRecord.PrevAddress = deleteRecord.PrevAddress;
+                fileStream.Position = deleteRecord.NextAddress;
+                DataRecordParser.WriteRecordAddress(fileStream, nextRecord);
+            }
+
+            if (prevRecord == null)
+            {
+                if (nextRecord != null)
+                    HeaderData.FirstRecordPosition = deleteRecord.NextAddress;
+                else
+                    HeaderData.FirstRecordPosition = 0;
+            }
+
+            if (nextRecord == null)
+            {
+                if (prevRecord != null)
+                    HeaderData.LastRecordPosition = deleteRecord.PrevAddress;
+                else
+                    HeaderData.LastRecordPosition = 0;
             }
         }
 
-        private void AddRowToTable(TTableDefinition row, FileStream fileStream)
+        private void UpdateData(FileStream fileStream, TTableDefinition row, out long address)
         {
-            byte[] rowBytes = new byte[0];
+            if (!RecordReadTracker.ContainsRecord(row))
+                throw new Exception("Record is not tracked. Only records read from database may be updated.");
 
-            foreach (var field in TableMetaData.Fields)
+            address = fileStream.Position;
+
+            fileStream.Position = RecordReadTracker.GetAddress(row);
+            var record = DataRecordParser.ReadRecord(fileStream);
+            fileStream.Position = RecordReadTracker.GetAddress(row);
+
+            DataRecordParser.WriteRecord(fileStream, TableMetaData, new DataRecord<TTableDefinition>(record.PrevAddress, record.NextAddress, row));
+        }
+
+        private void InsertData(FileStream fileStream, TTableDefinition row, out long address)
+        {
+            var dataRecord = new DataRecord<TTableDefinition>(0, 0, row);
+
+            fileStream.Seek(0, SeekOrigin.End);
+
+            if (HeaderData.FirstRecordPosition == 0)
+                HeaderData.FirstRecordPosition = fileStream.Position;
+            else
             {
-                var fieldValue = field.Property.GetValue(row);
-                if (field.FieldType == EnumFieldTypes.String && fieldValue != null)
-                {
-                    string fieldValueString = (string)fieldValue;
-                    if (fieldValueString.Length > field.Length)
-                        fieldValueString = fieldValueString.Substring(0, field.Length);
-                    fieldValue = fieldValueString;
-                }
+                long nextAddress = fileStream.Position;
+                long prevAddress = HeaderData.LastRecordPosition;
 
-                var fieldBytes = BinaryHelper.Serialize(fieldValue);
-                byte[] fieldBytesLength = new byte[1] { (byte)fieldBytes.Length };
-                byte[] newRow = new byte[rowBytes.Length + fieldBytes.Length + 1];
-                rowBytes.CopyTo(newRow, 0);
-                fieldBytesLength.CopyTo(newRow, rowBytes.Length);
-                fieldBytes.CopyTo(newRow, rowBytes.Length + 1);
+                UpdatePreviousRecordNextAddress(fileStream, prevAddress, nextAddress);
 
-                rowBytes = newRow;
+                dataRecord.PrevAddress = HeaderData.LastRecordPosition;
+
+                fileStream.Position = nextAddress;
             }
 
-            fileStream.Write(rowBytes, 0, rowBytes.Length);
+            HeaderData.LastRecordPosition = fileStream.Position;
+            address = fileStream.Position;
+
+            DataRecordParser.WriteRecord(fileStream, TableMetaData, dataRecord);
+        }
+
+        private void UpdatePreviousRecordNextAddress(FileStream fileStream, long prevAddress, long nextAddress)
+        {
+            fileStream.Position = prevAddress;
+            var prevRecord = DataRecordParser.ReadRecord(fileStream);
+            prevRecord.NextAddress = nextAddress;
+            fileStream.Position = prevAddress;
+            DataRecordParser.WriteRecordAddress(fileStream, prevRecord);
         }
 
         public FDDataReader<TTableDefinition> GetReader()
         {
+            ReadHeaderData();
             return new FDDataReader<TTableDefinition>(this);
         }
     }

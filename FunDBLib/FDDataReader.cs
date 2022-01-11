@@ -6,62 +6,55 @@ namespace FunDBLib
     public class FDDataReader<TTableDefinition> : IDisposable
         where TTableDefinition : class, new()
     {
-        private FDTable Table { get; set; }
-
-        private int Index { get; set; }
+        private FDTable<TTableDefinition> Table { get; set; }
 
         private FileStream FileStream { get; set; }
 
-        internal FDDataReader(FDTable table)
+        internal FDDataReader(FDTable<TTableDefinition> table)
         {
             Table = table;
 
             FileStream = new FileStream(Table.DataPath, FileMode.Open);
+            FileStream.Position = Table.HeaderData.FirstRecordPosition;
         }
 
         public bool ReadLine(out TTableDefinition row)
         {
-            row = new TTableDefinition();
-
-            bool dataFound = false;
-
-            foreach (var field in Table.TableMetaData.Fields)
+            if (FileStream.Position == 0)
             {
-                byte[] fieldLengthByte = new byte[1];
-                var bytesRead = FileStream.Read(fieldLengthByte, 0, fieldLengthByte.Length);
-                if (bytesRead > 0)
-                {
-                    byte[] fieldValueBytes = new byte[fieldLengthByte[0]];
-                    FileStream.Read(fieldValueBytes, 0, fieldValueBytes.Length);
-
-                    var fieldValue = Deserialize(field, fieldValueBytes);
-                    field.Property.SetValue(row, fieldValue);
-
-                    dataFound = true;
-                }
-                else
-                {
-                    row = null;
-                    dataFound = false;
-                    break;
-                }
+                row = null;
+                return false;
             }
+            else
+            {
+                long address = FileStream.Position;
 
-            return dataFound;
+                var record = DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData);
+                FileStream.Position = record.NextAddress;
+                row = record.Row;
+
+                Table.RecordReadTracker.Add(record.Row, address);
+
+                return true;
+            }
         }
 
-        private object Deserialize(MetaData.MetaField field, byte[] fieldBytes)
+        public TTableDefinition Seek<TIndexDefinition>(TIndexDefinition indexRow)
+            where TIndexDefinition : class, new()
         {
-            if (field.FieldType == EnumFieldTypes.Int)
-                return BinaryHelper.DeserializeInt(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.Decimal)
-                return BinaryHelper.DeserializeDecimal(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.String)
-                return BinaryHelper.DeserializeString(fieldBytes);
-            else if (field.FieldType == EnumFieldTypes.Byte)
-                return fieldBytes[0];
+            var index = Table.GetIndex<TIndexDefinition>();
+
+            var address = index.Seek(indexRow, out bool found);
+
+            if (found)
+            {
+                FileStream.Position = address;
+                var record = DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData).Row;
+                Table.RecordReadTracker.Add(record, address);
+                return record;
+            }
             else
-                throw new Exception($"Field type not implemented: {field.FieldType}");
+                return null;
         }
 
         public void Dispose()
