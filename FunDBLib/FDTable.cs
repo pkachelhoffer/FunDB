@@ -145,7 +145,7 @@ namespace FunDBLib
             Indexes.Add(index);
         }
 
-        public FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
+        internal FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
             where TIndexDefinition : class, new()
         {
             foreach (var index in Indexes)
@@ -173,6 +173,7 @@ namespace FunDBLib
         public void Submit()
         {
             using (var fileStream = new FileStream(DataPath, FileMode.Open))
+            using (var indexCollectionReader = new IndexCollectionReader<TTableDefinition>(Indexes))
             {
                 foreach (var rowAction in RowActions)
                 {
@@ -185,7 +186,7 @@ namespace FunDBLib
                     else if (rowAction.RowAction.RowActionType == EnumRowActionType.Delete)
                         DeleteData(fileStream, rowAction.Row, out address);
 
-                    MaintainIndexes(rowAction, address);
+                    indexCollectionReader.MaintainIndexes(rowAction.Row, rowAction.RowAction, address);
                 }
             }
 
@@ -282,12 +283,6 @@ namespace FunDBLib
             address = fileStream.Position;
 
             DataRecordParser.WriteRecord(fileStream, TableMetaData, dataRecord);
-        }
-
-        private void MaintainIndexes((TTableDefinition, RowAction) rowAction, long address)
-        {
-            foreach(var index in Indexes)
-                index.MaintainIndex(rowAction.Item1, rowAction.Item2, address);
         }
 
         private void UpdatePreviousRecordNextAddress(FileStream fileStream, long prevAddress, long nextAddress)

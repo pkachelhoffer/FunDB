@@ -49,7 +49,9 @@ namespace FunDBLib
             if (found)
             {
                 FileStream.Position = address;
-                return DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData).Row;
+                var record = DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData).Row;
+                Table.RecordReadTracker.Add(record, address);
+                return record;
             }
             else
                 return null;

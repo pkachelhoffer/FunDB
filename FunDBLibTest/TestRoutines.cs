@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using FunDBLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -23,6 +24,27 @@ namespace FunDBLibTest
             TestIndex();
         }
 
+        [TestMethod]
+        public void PerformanceTest()
+        {
+            ClearDB();
+            CreateDB();
+
+            var dc = new TestDataContext();
+
+            for (int x = 0; x < 1000000; x++)
+            {
+                dc.TestTable.Add(new TestTable(x, $"This is row {x}", x * 12.25m));
+            }
+
+            dc.TestTable.Submit();
+
+            using(var reader = dc.TestTable.GetReader())
+            {
+                var row = reader.Seek(new PrimaryKeyIndexInt(){ PrimaryKey = 123456});
+            }
+        }
+
         private void CreateDB()
         {
             TestDataContext context = new TestDataContext();
@@ -36,21 +58,59 @@ namespace FunDBLibTest
         {
             TestDataContext context = new TestDataContext();
 
-            int recordCount = 100000;
+            List<TestTableIndex> indexEntries = new List<TestTableIndex>();
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 5, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 4, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 6, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 8, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 1, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 3, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 2, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 9, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 7, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 10, LineName = "sadfas" });
 
-            for (int x = 0; x < recordCount; x++)
-                context.TestTableIndex.Add(new TestTableIndex() { TestTableIndexID = x, LineName = $"Line {x}" });
+            foreach (var entry in indexEntries)
+                context.TestTableIndex.Add(entry);
 
             context.TestTableIndex.Submit();
 
             using (var reader = context.TestTableIndex.GetReader())
             {
-                for (int x = 0; x < recordCount; x++)
+                foreach (var entry in indexEntries)
                 {
-                    var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = x });
-                    Assert.AreEqual(x, row.TestTableIndexID);
+                    var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = entry.TestTableIndexID });
+                    Assert.IsNotNull(row, $"Could not find record for ID {entry.TestTableIndexID}.");
+                    Assert.AreEqual(entry.TestTableIndexID, row.TestTableIndexID);
                 }
+            }
 
+            //Delete index
+            using (var reader = context.TestTableIndex.GetReader())
+            {
+                var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = 5 });
+                context.TestTableIndex.Delete(row);
+                row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = 10 });
+                context.TestTableIndex.Delete(row);
+                row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = 1 });
+                context.TestTableIndex.Delete(row);
+            }
+
+            context.TestTableIndex.Submit();
+
+            using (var reader = context.TestTableIndex.GetReader())
+            {
+                foreach (var entry in indexEntries)
+                {
+                    var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = entry.TestTableIndexID });
+                    if (entry.TestTableIndexID == 5 || entry.TestTableIndexID == 10 || entry.TestTableIndexID == 1)
+                        Assert.IsNull(row, $"Row {entry.TestTableIndexID} was not deleted from index");
+                    else
+                    {
+                        Assert.IsNotNull(row, $"Could not find record for ID {entry.TestTableIndexID}.");
+                        Assert.AreEqual(entry.TestTableIndexID, row.TestTableIndexID);
+                    }
+                }
             }
         }
 
