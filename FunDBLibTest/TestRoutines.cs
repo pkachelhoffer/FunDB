@@ -1,4 +1,5 @@
 using System.IO;
+using FunDBLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FunDBLibTest
@@ -18,6 +19,8 @@ namespace FunDBLibTest
             UpdateData();
 
             DeleteData();
+
+            TestIndex();
         }
 
         private void CreateDB()
@@ -26,7 +29,29 @@ namespace FunDBLibTest
 
             Assert.IsTrue(Directory.Exists(TestDataContext.ConstDataPath), "DB directory not created");
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable.dat")), "DB file not created");
-            Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "TestTable_PK.idx")), "PK index file not created");
+            Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable_PK.idx")), "PK index file not created");
+        }
+
+        private void TestIndex()
+        {
+            TestDataContext context = new TestDataContext();
+
+            int recordCount = 100000;
+
+            for (int x = 0; x < recordCount; x++)
+                context.TestTableIndex.Add(new TestTableIndex() { TestTableIndexID = x, LineName = $"Line {x}" });
+
+            context.TestTableIndex.Submit();
+
+            using (var reader = context.TestTableIndex.GetReader())
+            {
+                for (int x = 0; x < recordCount; x++)
+                {
+                    var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = x });
+                    Assert.AreEqual(x, row.TestTableIndexID);
+                }
+
+            }
         }
 
         private void DeleteData()
@@ -60,7 +85,7 @@ namespace FunDBLibTest
                         found = true;
 
             Assert.AreEqual(false, found, "Delete row found when it should be deleted");
-        }   
+        }
 
         private void UpdateData()
         {
@@ -77,7 +102,7 @@ namespace FunDBLibTest
                         context.TestTable.Update(row);
                     }
                 }
-            
+
             context.TestTable.Submit();
 
             bool found = false;
@@ -124,7 +149,8 @@ namespace FunDBLibTest
         {
             if (Directory.Exists(TestDataContext.ConstDataPath))
                 foreach (var file in Directory.GetFiles(TestDataContext.ConstDataPath))
-                    File.Delete(file);
+                    if (Path.GetFileName(file).StartsWith("fdb"))
+                        File.Delete(file);
         }
     }
 }

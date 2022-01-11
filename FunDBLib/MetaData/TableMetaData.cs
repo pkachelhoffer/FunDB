@@ -25,6 +25,11 @@ namespace FunDBLib.MetaData
             Parse(tableType);
         }
 
+        public void AddMetaField(MetaField metaField)
+        {
+            FieldDictionary.Add(metaField.Name, metaField);
+        }
+
         private void InitialiseTypeLengths()
         {
             TypeLengthDictionary = new Dictionary<EnumFieldTypes, int>();

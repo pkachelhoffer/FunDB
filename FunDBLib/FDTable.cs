@@ -60,6 +60,8 @@ namespace FunDBLib
         internal abstract string GetTableName();
 
         protected abstract void InitialiseTyped();
+
+
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -141,6 +143,16 @@ namespace FunDBLib
             var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
 
             Indexes.Add(index);
+        }
+
+        public FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
+            where TIndexDefinition : class, new()
+        {
+            foreach (var index in Indexes)
+                if (index.IndexDefinitionType == typeof(TIndexDefinition))
+                    return index as FDIndex<TTableDefinition, TIndexDefinition>;
+
+            throw new Exception($"Index for {typeof(TIndexDefinition)} not found");
         }
 
         public void Add(TTableDefinition row)

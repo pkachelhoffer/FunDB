@@ -4,14 +4,16 @@ using FunDBLib.MetaData;
 
 namespace FunDBLib.Index
 {
-    public abstract class FDIndex<TFDTableDefinition>
+    public abstract class FDIndex<TTableDefinition>
     {
-        internal abstract void MaintainIndex(TFDTableDefinition tableRow, RowAction rowAction, long rowAddress);
+        internal abstract void MaintainIndex(TTableDefinition tableRow, RowAction rowAction, long rowAddress);
+
+        internal abstract Type IndexDefinitionType { get; }
     }
 
-    public class FDIndex<TFDTableDefinition, TFDIndexDefinition> : FDIndex<TFDTableDefinition>
-        where TFDTableDefinition : class, new()
-        where TFDIndexDefinition : class, new()
+    public class FDIndex<TTableDefinition, TIndexDefinition> : FDIndex<TTableDefinition>
+        where TTableDefinition : class, new()
+        where TIndexDefinition : class, new()
     {
         private string IndexName { get; set; }
 
@@ -19,11 +21,13 @@ namespace FunDBLib.Index
 
         private string DataPath { get; set; }
 
-        private Func<TFDTableDefinition, TFDIndexDefinition> FuncGenerateIndex { get; set; }
+        private Func<TTableDefinition, TIndexDefinition> FuncGenerateIndex { get; set; }
 
-        private TableMetaData MetaData { get; set; }
+        private TableMetaData MetaDataKey { get; set; }
 
-        internal FDIndex(Func<TFDTableDefinition, TFDIndexDefinition> funcGenerateIndex, string tablePath, string tableName, string indexName)
+        internal override Type IndexDefinitionType => GetType().GenericTypeArguments[1];
+
+        internal FDIndex(Func<TTableDefinition, TIndexDefinition> funcGenerateIndex, string tablePath, string tableName, string indexName)
         {
             FuncGenerateIndex = funcGenerateIndex;
             IndexName = indexName;
@@ -31,21 +35,21 @@ namespace FunDBLib.Index
 
             string basePath = Path.GetDirectoryName(tablePath);
 
-            MetaData = new TableMetaData(funcGenerateIndex.GetType().GenericTypeArguments[1]);
+            MetaDataKey = new TableMetaData(funcGenerateIndex.GetType().GenericTypeArguments[1]);
 
             Initialise(basePath);
         }
 
         private void Initialise(string dataPath)
         {
-            DataPath = Path.Combine(dataPath, $"{TableName}_{IndexName}.idx");
-            
+            DataPath = Path.Combine(dataPath, $"fdb_{TableName}_{IndexName}.idx");
+
             if (!File.Exists(DataPath))
                 using (var fileStream = new FileStream(DataPath, FileMode.CreateNew))
                 { }
         }
 
-        internal override void MaintainIndex(TFDTableDefinition tableRow, RowAction rowAction, long rowAddress)
+        internal override void MaintainIndex(TTableDefinition tableRow, RowAction rowAction, long rowAddress)
         {
             var indexRow = FuncGenerateIndex(tableRow);
 
@@ -53,18 +57,16 @@ namespace FunDBLib.Index
                 MaintainIndexAdd(indexRow, rowAddress);
         }
 
-        private void MaintainIndexAdd(TFDIndexDefinition indexRow, long rowAddress)
+        private void MaintainIndexAdd(TIndexDefinition indexRow, long rowAddress)
         {
             var indexRowBytes = GenerateIndexRow(indexRow);
             indexRowBytes = AddToRow(rowAddress, indexRowBytes);
 
             using (var fileStream = new FileStream(DataPath, FileMode.Append))
                 fileStream.Write(indexRowBytes, 0, indexRowBytes.Length);
-
-            Seek(indexRow);
         }
 
-        private long Seek(TFDIndexDefinition indexRow)
+        internal long Seek(TIndexDefinition indexRow, out bool found)
         {
             var indexRowBytes = GenerateIndexRow(indexRow);
             var rowLength = indexRowBytes.Length + 8;
@@ -73,33 +75,55 @@ namespace FunDBLib.Index
             {
                 int numberOfRecords = GetNumberOfRecords(fileStream, rowLength);
 
-                bool done = Seek(fileStream, indexRow, rowLength, 0, numberOfRecords - 1, numberOfRecords / 2, out bool found);
+                Seek(fileStream, indexRow, rowLength, 0, numberOfRecords - 1, numberOfRecords / 2, out found);
 
-                //var row = ReadAddress(fileStream, address, rowLength);
+                if (found)
+                {
+                    var row = DataRecordParser.ReadRow<TIndexDefinition>(fileStream, MetaDataKey);
+                    var addressBytes = new byte[8];
+                    fileStream.Read(addressBytes, 0, addressBytes.Length);
+                    var address = BinaryHelper.DeserializeLong(addressBytes);
+                    return address;
+                }
+                else
+                    return 0;
             }
-
-            return 0;
         }
 
-        private bool Seek(FileStream fileStream, TFDIndexDefinition indexRow, int rowLength, int rangeStart, int rangeEnd, int record, out bool found)
+        private void Seek(FileStream fileStream, TIndexDefinition indexRow, int rowLength, int rangeStart, int rangeEnd, int record, out bool found)
         {
             found = false;
 
             long address = rowLength * record;
             fileStream.Position = address;
-            var row = DataRecordParser.ReadRow<TFDIndexDefinition>(fileStream, MetaData);
+            var row = DataRecordParser.ReadRow<TIndexDefinition>(fileStream, MetaDataKey);
 
-            var compareResult = indexRow.CompareObjects(row);
+            var compareResult = indexRow.CompareObjects(row); // -1 then row is less than indexRow
             found = compareResult == 0;
 
             if (rangeStart == rangeEnd || found)
-            {
                 fileStream.Position = address;
-                return true;
-            }
             else
             {
-                return false;
+                if (compareResult == 1) // Too low, need to search higher
+                {
+                    if (rangeStart + 1 == rangeEnd) // The last step handle manually to avoid stack overflow (1 / 2 is 0)
+                    {
+                        rangeStart++;
+                        record++;
+                    }
+                    else
+                    {
+                        rangeStart = record;
+                        record = rangeStart + ((rangeEnd - rangeStart) / 2);
+                    }
+                }
+                else // Too high, need to search lower
+                {
+                    rangeEnd = record;
+                    record = rangeStart + ((rangeEnd - rangeStart) / 2);
+                }
+                Seek(fileStream, indexRow, rowLength, rangeStart, rangeEnd, record, out found);
             }
         }
 
@@ -111,11 +135,11 @@ namespace FunDBLib.Index
             return bytes;
         }
 
-        private byte[] GenerateIndexRow(TFDIndexDefinition indexRow)
+        private byte[] GenerateIndexRow(TIndexDefinition indexRow)
         {
             byte[] rowBytes = new byte[0];
 
-            foreach (var indexProperty in typeof(TFDIndexDefinition).GetProperties())
+            foreach (var indexProperty in typeof(TIndexDefinition).GetProperties())
             {
                 var indexValue = indexProperty.GetValue(indexRow);
 
