@@ -30,6 +30,20 @@ namespace FunDBLib.Index
             }
         }
 
+        public void MaintainIndexes(IEnumerable<IndexMaintainInstruction<TTableDefinition>> instructions)
+        {
+            foreach(var index in Indexes)
+            {
+                if (!FileStreamDictionary.ContainsKey(index))
+                {
+                    FileStream fileStream = new FileStream(index.DataPath, FileMode.Open);
+                    FileStreamDictionary.Add(index, fileStream);
+                }
+
+                index.MaintainIndex(instructions, FileStreamDictionary[index]);
+            }
+        }
+
         public void Dispose()
         {
             foreach(var item in FileStreamDictionary)

@@ -7,6 +7,7 @@ namespace FunDBLibTest
         [FDPrimaryKey]
         public int TestTableIndexID { get; set; }
 
+        [FDColumnTextAttribute(20)]
         public string LineName { get; set; }
     }
 }

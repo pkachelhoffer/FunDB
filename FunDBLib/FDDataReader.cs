@@ -40,7 +40,7 @@ namespace FunDBLib
         }
 
         public TTableDefinition Seek<TIndexDefinition>(TIndexDefinition indexRow)
-            where TIndexDefinition : class, new()
+            where TIndexDefinition : class, IComparable, new()
         {
             var index = Table.GetIndex<TIndexDefinition>();
 

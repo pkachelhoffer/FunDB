@@ -60,8 +60,6 @@ namespace FunDBLib
         internal abstract string GetTableName();
 
         protected abstract void InitialiseTyped();
-
-
     }
 
     public class FDTable<TTableDefinition> : FDTable
@@ -138,7 +136,7 @@ namespace FunDBLib
         }
 
         public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
-            where TFDIndexDefinition : class, new()
+            where TFDIndexDefinition : class, IComparable, new()
         {
             var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
 
@@ -146,7 +144,7 @@ namespace FunDBLib
         }
 
         internal FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
-            where TIndexDefinition : class, new()
+            where TIndexDefinition : class, IComparable, new()
         {
             foreach (var index in Indexes)
                 if (index.IndexDefinitionType == typeof(TIndexDefinition))
@@ -175,6 +173,8 @@ namespace FunDBLib
             using (var fileStream = new FileStream(DataPath, FileMode.Open))
             using (var indexCollectionReader = new IndexCollectionReader<TTableDefinition>(Indexes))
             {
+                List<IndexMaintainInstruction<TTableDefinition>> maintainInstructions = new List<IndexMaintainInstruction<TTableDefinition>>();
+
                 foreach (var rowAction in RowActions)
                 {
                     long address = 0;
@@ -186,8 +186,11 @@ namespace FunDBLib
                     else if (rowAction.RowAction.RowActionType == EnumRowActionType.Delete)
                         DeleteData(fileStream, rowAction.Row, out address);
 
-                    indexCollectionReader.MaintainIndexes(rowAction.Row, rowAction.RowAction, address);
+                    maintainInstructions.Add(new IndexMaintainInstruction<TTableDefinition>(rowAction.Row, rowAction.RowAction, address));
                 }
+
+                //indexCollectionReader.MaintainIndexes()
+                indexCollectionReader.MaintainIndexes(maintainInstructions);
             }
 
             SaveHeaderData();

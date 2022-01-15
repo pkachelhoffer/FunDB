@@ -45,7 +45,7 @@ namespace FunDBLibTest
             }
         }
 
-        private void CreateDB()
+        public static void CreateDB()
         {
             TestDataContext context = new TestDataContext();
 
@@ -205,7 +205,7 @@ namespace FunDBLibTest
             }
         }
 
-        private void ClearDB()
+        public static void ClearDB()
         {
             if (Directory.Exists(TestDataContext.ConstDataPath))
                 foreach (var file in Directory.GetFiles(TestDataContext.ConstDataPath))
