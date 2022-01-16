@@ -39,9 +39,9 @@ namespace FunDBLibTest
 
             dc.TestTable.Submit();
 
-            using(var reader = dc.TestTable.GetReader())
+            using (var reader = dc.TestTable.GetReader())
             {
-                var row = reader.Seek(new PrimaryKeyIndexInt(){ PrimaryKey = 123456});
+                var row = reader.Seek(new PrimaryKeyIndexInt() { PrimaryKey = 123456 });
             }
         }
 
@@ -69,11 +69,30 @@ namespace FunDBLibTest
             indexEntries.Add(new TestTableIndex() { TestTableIndexID = 9, LineName = "sadfas" });
             indexEntries.Add(new TestTableIndex() { TestTableIndexID = 7, LineName = "sadfas" });
             indexEntries.Add(new TestTableIndex() { TestTableIndexID = 10, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 12, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 14, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 16, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 18, LineName = "sadfas" });
+            indexEntries.Add(new TestTableIndex() { TestTableIndexID = 20, LineName = "sadfas" });
 
             foreach (var entry in indexEntries)
                 context.TestTableIndex.Add(entry);
 
             context.TestTableIndex.Submit();
+
+            List<TestTableIndex> indexEntries2 = new List<TestTableIndex>();
+            indexEntries2.Add(new TestTableIndex() { TestTableIndexID = 11, LineName = "sadfas" });
+            indexEntries2.Add(new TestTableIndex() { TestTableIndexID = 13, LineName = "sadfas" });
+            indexEntries2.Add(new TestTableIndex() { TestTableIndexID = 15, LineName = "sadfas" });
+            indexEntries2.Add(new TestTableIndex() { TestTableIndexID = 17, LineName = "sadfas" });
+            indexEntries2.Add(new TestTableIndex() { TestTableIndexID = 19, LineName = "sadfas" });
+
+            foreach (var entry in indexEntries2)
+                context.TestTableIndex.Add(entry);
+
+            context.TestTableIndex.Submit();
+
+            indexEntries.AddRange(indexEntries2);
 
             using (var reader = context.TestTableIndex.GetReader())
             {
@@ -84,6 +103,11 @@ namespace FunDBLibTest
                     Assert.AreEqual(entry.TestTableIndexID, row.TestTableIndexID);
                 }
             }
+
+            
+
+            foreach (var entry in indexEntries)
+                context.TestTableIndex.Add(entry);
 
             //Delete index
             using (var reader = context.TestTableIndex.GetReader())

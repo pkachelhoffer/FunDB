@@ -63,8 +63,6 @@ namespace FunDBLib.Index
             if (!maintainInstructions.Any())
                 return;
 
-            List<byte> listBytes = new List<byte>();
-
             var orderedList = maintainInstructions.Select(s => new { s.Address, IndexRow = FuncGenerateIndex(s.Row) }).OrderBy(s => s.IndexRow).ToArray();
 
             int rowLength = GenerateIndexRow(orderedList[0].IndexRow).Length + 8;
@@ -73,38 +71,59 @@ namespace FunDBLib.Index
             Seek(fileStream, orderedList[0].IndexRow, out bool found);
             long startAddress = fileStream.Position;
 
+            var newLength = (orderedList.Length * rowLength) + (fileStream.Length - startAddress);
+            var newBytes = new byte[newLength];
+            long newIndex = 0;
+
+            (TIndexDefinition indexRow, byte[] rowBytes)? indexRowData = null;
+            (TIndexDefinition indexRow, byte[] rowBytes)? newRowData = null;
+
             int x = 0;
 
-            TIndexDefinition indexRow = null;
-
-            while (x < orderedList.Length)
+            while (newIndex < newBytes.Length)
             {
                 bool takeIndex = false;
-                if (fileStream.Position == fileStream.Length)
-                    takeIndex = true;
-                else
+                if (indexRowData == null && fileStream.Position < fileStream.Length)
                 {
-                    if (indexBytes == null)
-                    {
-                        fileStream.Read(indexBytes, 0, indexBytes.Length);
-                        ReadAddress(fileStream);
-                    }
+                    var rowBytes = new byte[rowLength];
+                    fileStream.Read(rowBytes, 0, rowBytes.Length);
+
+                    var rowValue = DataRecordParser.ReadRow<TIndexDefinition>(rowBytes, MetaDataKey);
+
+                    indexRowData = (rowValue, rowBytes);
                 }
+
+                if (newRowData == null && x < orderedList.Length)
+                {
+                    var indexRowBytes = GenerateIndexRow(orderedList[x].IndexRow);
+                    indexRowBytes = AddToRow(orderedList[x].Address, indexRowBytes);
+
+                    newRowData = (orderedList[x].IndexRow, indexRowBytes);
+                }
+
+                if (newRowData != null && (indexRowData == null || newRowData.Value.indexRow.CompareObjects(indexRowData.Value.indexRow) == -1))
+                    takeIndex = true;
 
                 if (takeIndex)
                 {
                     var indexRowBytes = GenerateIndexRow(orderedList[x].IndexRow);
                     indexRowBytes = AddToRow(orderedList[x].Address, indexRowBytes);
 
-                    listBytes.AddRange(indexRowBytes);
+                    indexRowBytes.CopyTo(newBytes, newIndex);
 
                     x++;
                 }
+                else
+                {
+                    indexRowData.Value.rowBytes.CopyTo(newBytes, newIndex);
+                    indexRowData = null;
+                }
+
+                newIndex += rowLength;
             }
 
-            var listBytesArray = listBytes.ToArray();
             fileStream.Position = startAddress;
-            fileStream.Write(listBytesArray, 0, listBytesArray.Length);
+            fileStream.Write(newBytes, 0, newBytes.Length);
         }
 
         internal override void MaintainIndex(TTableDefinition tableRow, RowAction rowAction, long rowAddress, FileStream fileStream)
