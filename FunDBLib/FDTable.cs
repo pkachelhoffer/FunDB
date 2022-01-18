@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using FunDBLib.Attributes;
 using FunDBLib.Index;
 using FunDBLib.MetaData;
+using System.Threading.Tasks;
 
 namespace FunDBLib
 {
@@ -107,48 +108,48 @@ namespace FunDBLib
             var primaryKey = TableMetaData.FieldDictionary[TableMetaData.PrimaryKey];
 
             if (primaryKey.FieldType == EnumFieldTypes.Int)
-                AddIndex("PK", s => 
+                AddIndex("PK", s =>
                 {
-                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s) };
                 });
             else if (primaryKey.FieldType == EnumFieldTypes.Long)
-                AddIndex("PK", s => 
+                AddIndex("PK", s =>
                 {
-                    return new PrimaryKeyIndexLong() { PrimaryKey = (long)primaryKey.Property.GetValue(s)};
+                    return new PrimaryKeyIndexLong() { PrimaryKey = (long)primaryKey.Property.GetValue(s) };
                 });
             else if (primaryKey.FieldType == EnumFieldTypes.String)
-                AddIndex("PK", s => 
+                AddIndex("PK", s =>
                 {
-                    return new PrimaryKeyIndexString() { PrimaryKey = (string)primaryKey.Property.GetValue(s)};
+                    return new PrimaryKeyIndexString() { PrimaryKey = (string)primaryKey.Property.GetValue(s) };
                 });
             else if (primaryKey.FieldType == EnumFieldTypes.Byte)
-                AddIndex("PK", s => 
+                AddIndex("PK", s =>
                 {
-                    return new PrimaryKeyIndexByte() { PrimaryKey = (byte)primaryKey.Property.GetValue(s)};
+                    return new PrimaryKeyIndexByte() { PrimaryKey = (byte)primaryKey.Property.GetValue(s) };
                 });
             else if (primaryKey.FieldType == EnumFieldTypes.Enum)
-                AddIndex("PK", s => 
+                AddIndex("PK", s =>
                 {
-                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s)};
+                    return new PrimaryKeyIndexInt() { PrimaryKey = (int)primaryKey.Property.GetValue(s) };
                 });
             else
                 throw new Exception($"Primary key type {primaryKey.FieldType} not supported.");
         }
 
         public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
-            where TFDIndexDefinition : class, IComparable, new()
+            where TFDIndexDefinition : struct
         {
-            var index = new FDIndex<TTableDefinition, TFDIndexDefinition>(funcGenerateIndex, DataPath, GetTableName(), name);
+            var index = new FDIndex<TFDIndexDefinition, TTableDefinition>(funcGenerateIndex);
 
             Indexes.Add(index);
         }
 
-        internal FDIndex<TTableDefinition, TIndexDefinition> GetIndex<TIndexDefinition>()
-            where TIndexDefinition : class, IComparable, new()
+        internal FDIndex<TIndexDefinition, TTableDefinition> GetIndex<TIndexDefinition>()
+            where TIndexDefinition : struct
         {
             foreach (var index in Indexes)
                 if (index.IndexDefinitionType == typeof(TIndexDefinition))
-                    return index as FDIndex<TTableDefinition, TIndexDefinition>;
+                    return index as FDIndex<TIndexDefinition, TTableDefinition>;
 
             throw new Exception($"Index for {typeof(TIndexDefinition)} not found");
         }
@@ -171,7 +172,6 @@ namespace FunDBLib
         public void Submit()
         {
             using (var fileStream = new FileStream(DataPath, FileMode.Open))
-            using (var indexCollectionReader = new IndexCollectionReader<TTableDefinition>(Indexes))
             {
                 List<IndexMaintainInstruction<TTableDefinition>> maintainInstructions = new List<IndexMaintainInstruction<TTableDefinition>>();
 
@@ -189,8 +189,16 @@ namespace FunDBLib
                     maintainInstructions.Add(new IndexMaintainInstruction<TTableDefinition>(rowAction.Row, rowAction.RowAction, address));
                 }
 
-                //indexCollectionReader.MaintainIndexes()
-                indexCollectionReader.MaintainIndexes(maintainInstructions);
+                Parallel.ForEach(Indexes, index =>
+                {
+                    foreach (var instruction in maintainInstructions)
+                        if (instruction.RowAction.RowActionType == EnumRowActionType.Update || instruction.RowAction.RowActionType == EnumRowActionType.Add)
+                            index.MaintainRowAddUpdate(instruction.Row, instruction.Address);
+                        else
+                            index.MaintainRowDelete(instruction.Address);
+
+                    index.EndUpdate();
+                });
             }
 
             SaveHeaderData();
@@ -204,9 +212,8 @@ namespace FunDBLib
                 throw new Exception("Record is not tracked. Only records read from database may be updated.");
 
             fileStream.Position = RecordReadTracker.GetAddress(row);
-            var deleteRecord = DataRecordParser.ReadRecord(fileStream);
-
             address = fileStream.Position;
+            var deleteRecord = DataRecordParser.ReadRecord(fileStream);
 
             DataRecord prevRecord = null;
             DataRecord nextRecord = null;

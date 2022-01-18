@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace FunDBLib
 {
-    public class PrimaryKeyIndexInt : IComparable
+    public struct PrimaryKeyIndexInt : IComparable
     {
         public int PrimaryKey { get; set; }
 
@@ -13,7 +13,7 @@ namespace FunDBLib
         }
     }
 
-    public class PrimaryKeyIndexLong : IComparable
+    public struct PrimaryKeyIndexLong : IComparable
     {
         public long PrimaryKey { get; set; }
 
@@ -23,7 +23,7 @@ namespace FunDBLib
         }
     }
 
-    public class PrimaryKeyIndexString : IComparable
+    public struct PrimaryKeyIndexString : IComparable
     {
         public string PrimaryKey { get; set; }
 
@@ -33,7 +33,7 @@ namespace FunDBLib
         }
     }
 
-    public class PrimaryKeyIndexByte : IComparable
+    public struct PrimaryKeyIndexByte : IComparable
     {
         public byte PrimaryKey { get; set; }
 

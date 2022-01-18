@@ -40,13 +40,13 @@ namespace FunDBLib
         }
 
         public TTableDefinition Seek<TIndexDefinition>(TIndexDefinition indexRow)
-            where TIndexDefinition : class, IComparable, new()
+            where TIndexDefinition : struct
         {
             var index = Table.GetIndex<TIndexDefinition>();
 
-            var address = index.Seek(indexRow, out bool found);
+            var address = index.Seek(indexRow);
 
-            if (found)
+            if (address > 0)
             {
                 FileStream.Position = address;
                 var record = DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData).Row;

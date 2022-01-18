@@ -51,7 +51,6 @@ namespace FunDBLibTest
 
             Assert.IsTrue(Directory.Exists(TestDataContext.ConstDataPath), "DB directory not created");
             Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable.dat")), "DB file not created");
-            Assert.IsTrue(File.Exists(Path.Combine(TestDataContext.ConstDataPath, "fdb_TestTable_PK.idx")), "PK index file not created");
         }
 
         private void TestIndex()
@@ -103,8 +102,6 @@ namespace FunDBLibTest
                     Assert.AreEqual(entry.TestTableIndexID, row.TestTableIndexID);
                 }
             }
-
-            
 
             foreach (var entry in indexEntries)
                 context.TestTableIndex.Add(entry);
