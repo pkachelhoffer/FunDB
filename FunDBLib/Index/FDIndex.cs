@@ -15,14 +15,15 @@ namespace FunDBLib.Index
         public abstract void MaintainRowDelete(long address);
 
         public abstract void EndUpdate();
+
+        public abstract void Reset();
     }
 
     internal class FDIndex<TIndexDefinition, TTableDefinition> : FDIndex<TTableDefinition>
         where TIndexDefinition : struct
         where TTableDefinition : class, new()
     {
-        private List<IndexItem<TIndexDefinition>> DataList { get; set; }
-        private ILookup<TIndexDefinition, long> SeekLookup { get; set; }
+        private Dictionary<TIndexDefinition, List<long>> SeekLookup { get; set; }
 
         private Dictionary<long, IndexItem<TIndexDefinition>> AddressDictionary { get; set; }
 
@@ -32,7 +33,6 @@ namespace FunDBLib.Index
 
         public FDIndex(Func<TTableDefinition, TIndexDefinition> funcGenerateIndex)
         {
-            DataList = new List<IndexItem<TIndexDefinition>>();
             AddressDictionary = new Dictionary<long, IndexItem<TIndexDefinition>>();
 
             FuncGenerateIndex = funcGenerateIndex;
@@ -41,6 +41,11 @@ namespace FunDBLib.Index
         public void StartUpdate()
         {
             AddressDictionary.Clear();
+        }
+
+        public override void Reset()
+        {
+            AddressDictionary = new Dictionary<long, IndexItem<TIndexDefinition>>();
         }
 
         public override void MaintainRowAdd(TTableDefinition tableDefinition, long address)
@@ -70,13 +75,24 @@ namespace FunDBLib.Index
 
         public override void EndUpdate()
         {
-            DataList = DataList.OrderBy(s => s.IndexRow.ContainedObject).ToList();
-            SeekLookup = AddressDictionary.Select(s => s.Value).ToLookup(s => s.IndexRow.ContainedObject, s => s.Address);
+            RefreshSeekLookup();
+        }
+
+        private void RefreshSeekLookup()
+        {
+            SeekLookup = new Dictionary<TIndexDefinition, List<long>>();
+            foreach (var entry in AddressDictionary)
+            {
+                if (!SeekLookup.ContainsKey(entry.Value.IndexRow.ContainedObject))
+                    SeekLookup.Add(entry.Value.IndexRow.ContainedObject, new List<long>());
+
+                SeekLookup[entry.Value.IndexRow.ContainedObject].Add(entry.Key);
+            }
         }
 
         public long Seek(TIndexDefinition indexRow)
         {
-            if (SeekLookup.Contains(indexRow))
+            if (SeekLookup.ContainsKey(indexRow))
                 return SeekLookup[indexRow].First();
             else
                 return 0;

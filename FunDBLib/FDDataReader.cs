@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using FunDBLib.Index;
 
 namespace FunDBLib
 {
@@ -60,6 +61,21 @@ namespace FunDBLib
         public void Dispose()
         {
             FileStream.Dispose();
+        }
+
+        private void RefreshIndex(FDIndex<TTableDefinition> index)
+        {
+            FileStream.Position = Table.HeaderData.FirstRecordPosition;
+
+            long address = FileStream.Position;
+
+            while (ReadLine(out TTableDefinition row))
+            {
+                index.MaintainRowAdd(row, address);
+                address = FileStream.Position;
+            }
+
+            index.EndUpdate();
         }
     }
 }

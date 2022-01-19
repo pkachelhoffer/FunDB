@@ -103,9 +103,6 @@ namespace FunDBLibTest
                 }
             }
 
-            foreach (var entry in indexEntries)
-                context.TestTableIndex.Add(entry);
-
             //Delete index
             using (var reader = context.TestTableIndex.GetReader())
             {
