@@ -3,23 +3,43 @@ using System.Collections;
 
 namespace FunDBLib
 {
-    public class PrimaryKeyIndexInt
+    public struct PrimaryKeyIndexInt : IComparable
     {
         public int PrimaryKey { get; set; }
+
+        public int CompareTo(object obj)
+        {
+            return PrimaryKey.CompareTo(((PrimaryKeyIndexInt)obj).PrimaryKey);
+        }
     }
 
-    public class PrimaryKeyIndexLong
+    public struct PrimaryKeyIndexLong : IComparable
     {
         public long PrimaryKey { get; set; }
+
+        public int CompareTo(object obj)
+        {
+            return PrimaryKey.CompareTo(((PrimaryKeyIndexLong)obj).PrimaryKey);
+        }
     }
 
-    public class PrimaryKeyIndexString
+    public struct PrimaryKeyIndexString : IComparable
     {
         public string PrimaryKey { get; set; }
+
+        public int CompareTo(object obj)
+        {
+            return PrimaryKey.CompareTo(((PrimaryKeyIndexLong)obj).PrimaryKey);
+        }
     }
 
-    public class PrimaryKeyIndexByte
+    public struct PrimaryKeyIndexByte : IComparable
     {
         public byte PrimaryKey { get; set; }
+
+        public int CompareTo(object obj)
+        {
+            return PrimaryKey.CompareTo(((PrimaryKeyIndexLong)obj).PrimaryKey);
+        }
     }
 }

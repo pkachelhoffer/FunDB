@@ -1,264 +1,129 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using FunDBLib.MetaData;
+using System.Linq;
 
 namespace FunDBLib.Index
 {
-    internal abstract class FDIndex<TTableDefinition>
+    internal abstract class FDIndex
     {
-        internal abstract void MaintainIndex(TTableDefinition tableRow, RowAction rowAction, long rowAddress, FileStream fileStream);
+        public string Name { get; protected set; }
 
-        internal abstract Type IndexDefinitionType { get; }
-
-        public string DataPath { get; protected set; }
+        public FDIndex(string name)
+        {
+            Name = name;
+        }
     }
 
-    internal class FDIndex<TTableDefinition, TIndexDefinition> : FDIndex<TTableDefinition>
-        where TTableDefinition : class, new()
-        where TIndexDefinition : class, new()
+    internal abstract class FDIndex<TTableDefinition> : FDIndex
     {
-        private string IndexName { get; set; }
+        internal abstract Type IndexDefinitionType { get; }
 
-        private string TableName { get; set; }
+        public FDIndex(string name) : base(name)
+        {
+
+        }
+
+        public abstract void MaintainRowAdd(TTableDefinition tableDefinition, long address);
+
+        public abstract void MaintainRowAddUpdate(TTableDefinition tableDefinition, long address);
+
+        public abstract void MaintainRowDelete(long address);
+
+        public abstract void EndUpdate();
+
+        public abstract void Reset();
+    }
+
+    internal class FDIndex<TIndexDefinition, TTableDefinition> : FDIndex<TTableDefinition>
+        where TIndexDefinition : struct
+        where TTableDefinition : class, new()
+    {
+        private Dictionary<TIndexDefinition, List<long>> SeekLookup { get; set; }
+
+        private Dictionary<long, IndexItem<TIndexDefinition>> AddressDictionary { get; set; }
 
         private Func<TTableDefinition, TIndexDefinition> FuncGenerateIndex { get; set; }
 
-        private TableMetaData MetaDataKey { get; set; }
+        internal override Type IndexDefinitionType => GetType().GenericTypeArguments[0];
 
-        internal override Type IndexDefinitionType => GetType().GenericTypeArguments[1];
-
-        internal FDIndex(Func<TTableDefinition, TIndexDefinition> funcGenerateIndex, string tablePath, string tableName, string indexName)
+        public FDIndex(string name, Func<TTableDefinition, TIndexDefinition> funcGenerateIndex) : base(name)
         {
+            AddressDictionary = new Dictionary<long, IndexItem<TIndexDefinition>>();
+
             FuncGenerateIndex = funcGenerateIndex;
-            IndexName = indexName;
-            TableName = tableName;
-
-            string basePath = Path.GetDirectoryName(tablePath);
-
-            MetaDataKey = new TableMetaData(funcGenerateIndex.GetType().GenericTypeArguments[1]);
-
-            Initialise(basePath);
         }
 
-        private void Initialise(string dataPath)
+        public void StartUpdate()
         {
-            DataPath = Path.Combine(dataPath, $"fdb_{TableName}_{IndexName}.idx");
-
-            if (!File.Exists(DataPath))
-                using (var fileStream = new FileStream(DataPath, FileMode.CreateNew))
-                { }
+            AddressDictionary.Clear();
         }
 
-        internal override void MaintainIndex(TTableDefinition tableRow, RowAction rowAction, long rowAddress, FileStream fileStream)
+        public override void Reset()
         {
-            var indexRow = FuncGenerateIndex(tableRow);
+            AddressDictionary = new Dictionary<long, IndexItem<TIndexDefinition>>();
+        }
 
-            var indexRowBytes = GenerateIndexRow(indexRow);
-            var rowLength = indexRowBytes.Length + 8;
+        public override void MaintainRowAdd(TTableDefinition tableDefinition, long address)
+        {
+            var indexRow = FuncGenerateIndex(tableDefinition);
+            var indexItem = new IndexItem<TIndexDefinition>(new ComparableObject<TIndexDefinition>(indexRow), address);
 
-            Seek(fileStream, indexRow, out bool found);
+            AddressDictionary.Add(address, indexItem);
+        }
 
-            if (rowAction.RowActionType == EnumRowActionType.Add)
+        public override void MaintainRowAddUpdate(TTableDefinition tableDefinition, long address)
+        {
+            var indexRow = FuncGenerateIndex(tableDefinition);
+            var indexItem = new IndexItem<TIndexDefinition>(new ComparableObject<TIndexDefinition>(indexRow), address);
+
+            if (AddressDictionary.ContainsKey(address))
+                AddressDictionary.Remove(address);
+
+            AddressDictionary.Add(address, indexItem);
+        }
+
+        public override void MaintainRowDelete(long address)
+        {
+            if (AddressDictionary.ContainsKey(address))
+                AddressDictionary.Remove(address);
+        }
+
+        public override void EndUpdate()
+        {
+            RefreshSeekLookup();
+        }
+
+        private void RefreshSeekLookup()
+        {
+            SeekLookup = new Dictionary<TIndexDefinition, List<long>>();
+            foreach (var entry in AddressDictionary)
             {
-                ExtendIndex(fileStream, rowLength);
-                WriteToIndex(indexRow, rowAddress, fileStream);
-            }
-            else if (rowAction.RowActionType == EnumRowActionType.Delete)
-            {
-                if (found)
-                    ShortenIndex(fileStream, rowLength);
-            }
-            else if (rowAction.RowActionType == EnumRowActionType.Update)
-            {
-                WriteToIndex(indexRow, rowAddress, fileStream);
+                if (!SeekLookup.ContainsKey(entry.Value.IndexRow.ContainedObject))
+                    SeekLookup.Add(entry.Value.IndexRow.ContainedObject, new List<long>());
+
+                SeekLookup[entry.Value.IndexRow.ContainedObject].Add(entry.Key);
             }
         }
 
-        private void ExtendIndex(FileStream fileStream, int length)
+        public long Seek(TIndexDefinition indexRow)
         {
-            long startPosition = fileStream.Position;
-
-            fileStream.SetLength(fileStream.Length + length);
-
-            Queue<byte[]> queue = new Queue<byte[]>();
-
-            while (fileStream.Position < fileStream.Length)
-            {
-                long position = fileStream.Position;
-
-                byte[] readBytes = new byte[length];
-                var bytesRead = fileStream.Read(readBytes, 0, readBytes.Length);
-                queue.Enqueue(readBytes);
-
-                if (queue.Count > 1)
-                {
-                    var bytes = queue.Dequeue();
-                    fileStream.Position = position;
-                    fileStream.Write(bytes, 0, bytes.Length);
-                }
-            }
-
-            fileStream.Position = startPosition;
-        }
-
-        private void ShortenIndex(FileStream fileStream, int length)
-        {
-            long startPosition = fileStream.Position;
-
-            if (fileStream.Length <= (fileStream.Position + length))
-                fileStream.SetLength(fileStream.Length - length);
+            if (SeekLookup.ContainsKey(indexRow))
+                return SeekLookup[indexRow].First();
             else
+                return 0;
+        }
+
+        private struct IndexItem<T>
+        {
+            public ComparableObject<T> IndexRow { get; set; }
+
+            public long Address { get; set; }
+
+            public IndexItem(ComparableObject<T> indexRow, long address)
             {
-                long position = fileStream.Position;
-
-                byte[] readBytes = new byte[length];
-                fileStream.Read(readBytes, 0, readBytes.Length);
-
-                while (fileStream.Position < fileStream.Length)
-                {
-                    readBytes = new byte[length];
-                    fileStream.Read(readBytes, 0, readBytes.Length);
-                    long nextPosition = fileStream.Position;
-
-                    fileStream.Position = position;
-                    fileStream.Write(readBytes, 0, readBytes.Length);
-
-                    position = fileStream.Position;
-
-                    fileStream.Position = nextPosition;
-                }
-
-                fileStream.SetLength(fileStream.Length - length);
-                fileStream.Position = startPosition;
+                IndexRow = indexRow;
+                Address = address;
             }
-        }
-
-        private void WriteToIndex(TIndexDefinition indexRow, long rowAddress, FileStream fileStream)
-        {
-            var indexRowBytes = GenerateIndexRow(indexRow);
-            indexRowBytes = AddToRow(rowAddress, indexRowBytes);
-
-            fileStream.Write(indexRowBytes, 0, indexRowBytes.Length);
-        }
-
-        internal long Seek(TIndexDefinition indexRow, out bool found)
-        {
-            using (var fileStream = new FileStream(DataPath, FileMode.Open))
-            {
-                Seek(fileStream, indexRow, out found);
-
-                if (found)
-                    return ReadAddress(fileStream);
-                else
-                    return 0;
-            }
-        }
-
-        private void Seek(FileStream fileStream, TIndexDefinition indexRow, out bool found)
-        {
-            var indexRowBytes = GenerateIndexRow(indexRow);
-            var rowLength = indexRowBytes.Length + 8;
-
-            int numberOfRecords = GetNumberOfRecords(fileStream, rowLength);
-
-            if (numberOfRecords == 0)
-                found = false;
-            else
-                Seek(fileStream, indexRow, rowLength, 0, numberOfRecords - 1, numberOfRecords / 2, out found);
-        }
-
-        private long ReadAddress(FileStream fileStream)
-        {
-            var row = DataRecordParser.ReadRow<TIndexDefinition>(fileStream, MetaDataKey);
-            var addressBytes = new byte[8];
-            fileStream.Read(addressBytes, 0, addressBytes.Length);
-            var address = BinaryHelper.DeserializeLong(addressBytes);
-            return address;
-        }
-
-        private void Seek(FileStream fileStream, TIndexDefinition indexRow, int rowLength, int rangeStart, int rangeEnd, int record, out bool found)
-        {
-            found = false;
-
-            long address = rowLength * record;
-            fileStream.Position = address;
-            var row = DataRecordParser.ReadRow<TIndexDefinition>(fileStream, MetaDataKey);
-
-            var compareResult = indexRow.CompareObjects(row); // -1 then row is less than indexRow
-            found = compareResult == 0;
-
-
-            // Statement 1: If rangeStart equal rangeEnd then index was not found
-            // Statement 2: If record equals rangeEnd and indexRow is still larger, that means indexRow was not found and is after the rangeEnd
-            // Statement 3: It was found, stop
-            if (rangeStart == rangeEnd || (record == rangeEnd && compareResult == 1) || found)
-            {
-                if (found || compareResult == -1)
-                    fileStream.Position = address;
-                else
-                    fileStream.Position = address + rowLength;
-            }
-            else
-            {
-                if (compareResult == 1) // Too low, need to search higher
-                {
-                    if (rangeStart + 1 == rangeEnd) // The last step handle manually to avoid stack overflow (1 / 2 is 0)
-                    {
-                        rangeStart++;
-                        record++;
-                    }
-                    else
-                    {
-                        rangeStart = record;
-                        record = rangeStart + ((rangeEnd - rangeStart) / 2);
-                    }
-                }
-                else // Too high, need to search lower
-                {
-                    rangeEnd = record;
-                    record = rangeStart + ((rangeEnd - rangeStart) / 2);
-                }
-
-                Seek(fileStream, indexRow, rowLength, rangeStart, rangeEnd, record, out found);
-            }
-        }
-
-        private byte[] ReadAddress(FileStream fileStream, long address, int rowLength)
-        {
-            fileStream.Position = address;
-            var bytes = new byte[rowLength];
-            fileStream.Read(bytes, 0, bytes.Length);
-            return bytes;
-        }
-
-        private byte[] GenerateIndexRow(TIndexDefinition indexRow)
-        {
-            byte[] rowBytes = new byte[0];
-
-            foreach (var indexProperty in typeof(TIndexDefinition).GetProperties())
-            {
-                var indexValue = indexProperty.GetValue(indexRow);
-
-                rowBytes = AddToRow(indexValue, rowBytes);
-            }
-
-            return rowBytes;
-        }
-
-        private static byte[] AddToRow(object fieldValue, byte[] rowBytes)
-        {
-            var fieldBytes = BinaryHelper.Serialize(fieldValue);
-            byte[] newRow = new byte[rowBytes.Length + fieldBytes.Length];
-            rowBytes.CopyTo(newRow, 0);
-            fieldBytes.CopyTo(newRow, rowBytes.Length);
-
-            return newRow;
-        }
-
-        private int GetNumberOfRecords(FileStream fileStream, int rowLength)
-        {
-            return (int)(fileStream.Length / rowLength);
         }
     }
 }

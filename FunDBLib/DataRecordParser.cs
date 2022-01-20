@@ -67,6 +67,24 @@ namespace FunDBLib
             return new DataRecord(prevAddress, nextAddress);
         }
 
+        internal static TRecord ReadRow<TRecord>(byte[] bytes, TableMetaData tableMetaData)
+            where TRecord : class, new()
+        {
+            TRecord record = new TRecord();
+
+            int index = 0;
+
+            foreach (var field in tableMetaData.Fields)
+            {
+                var fieldBytes = bytes.FDCopyArray(index, field.Length);
+                var fieldValue = Deserialize(field.FieldType, fieldBytes);
+                field.Property.SetValue(record, fieldValue);
+                index += field.Length;
+            }
+
+            return record;
+        }
+
         internal static TRecord ReadRow<TRecord>(FileStream fileStream, TableMetaData tableMetaData)
             where TRecord : class, new()
         {

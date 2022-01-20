@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using FunDBLib.Index;
 
 namespace FunDBLib
 {
@@ -40,13 +41,20 @@ namespace FunDBLib
         }
 
         public TTableDefinition Seek<TIndexDefinition>(TIndexDefinition indexRow)
-            where TIndexDefinition : class, new()
+            where TIndexDefinition : struct
         {
-            var index = Table.GetIndex<TIndexDefinition>();
+            var cachedIndex = IndexController.Instance.GetIndex<TIndexDefinition, TTableDefinition>();
+            if (!cachedIndex.Loaded)
+            {
+                RefreshIndex(cachedIndex.Index);
+                IndexController.Instance.SetLoaded<TIndexDefinition, TTableDefinition>();
+            }
 
-            var address = index.Seek(indexRow, out bool found);
+            var index = cachedIndex.Index;
 
-            if (found)
+            var address = index.Seek(indexRow);
+
+            if (address > 0)
             {
                 FileStream.Position = address;
                 var record = DataRecordParser.ReadRecord<TTableDefinition>(FileStream, Table.TableMetaData).Row;
@@ -60,6 +68,21 @@ namespace FunDBLib
         public void Dispose()
         {
             FileStream.Dispose();
+        }
+
+        private void RefreshIndex(FDIndex<TTableDefinition> index)
+        {
+            FileStream.Position = Table.HeaderData.FirstRecordPosition;
+
+            long address = FileStream.Position;
+
+            while (ReadLine(out TTableDefinition row))
+            {
+                index.MaintainRowAdd(row, address);
+                address = FileStream.Position;
+            }
+
+            index.EndUpdate();
         }
     }
 }
