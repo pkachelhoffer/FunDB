@@ -4,9 +4,24 @@ using System.Linq;
 
 namespace FunDBLib.Index
 {
-    internal abstract class FDIndex<TTableDefinition>
+    internal abstract class FDIndex
+    {
+        public string Name { get; protected set; }
+
+        public FDIndex(string name)
+        {
+            Name = name;
+        }
+    }
+
+    internal abstract class FDIndex<TTableDefinition> : FDIndex
     {
         internal abstract Type IndexDefinitionType { get; }
+
+        public FDIndex(string name) : base(name)
+        {
+
+        }
 
         public abstract void MaintainRowAdd(TTableDefinition tableDefinition, long address);
 
@@ -31,7 +46,7 @@ namespace FunDBLib.Index
 
         internal override Type IndexDefinitionType => GetType().GenericTypeArguments[0];
 
-        public FDIndex(Func<TTableDefinition, TIndexDefinition> funcGenerateIndex)
+        public FDIndex(string name, Func<TTableDefinition, TIndexDefinition> funcGenerateIndex) : base(name)
         {
             AddressDictionary = new Dictionary<long, IndexItem<TIndexDefinition>>();
 

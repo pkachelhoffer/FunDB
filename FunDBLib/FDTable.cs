@@ -70,8 +70,6 @@ namespace FunDBLib
 
         private List<(TTableDefinition Row, RowAction RowAction)> RowActions { get; set; }
 
-        private List<FDIndex<TTableDefinition>> Indexes { get; set; }
-
         public FDTable()
         {
             RowActions = new List<(TTableDefinition, RowAction)>();
@@ -79,8 +77,6 @@ namespace FunDBLib
             RowType = typeof(TTableDefinition);
 
             TableMetaData = new TableMetaData(typeof(TTableDefinition));
-
-            Indexes = new List<FDIndex<TTableDefinition>>();
         }
 
         protected override sealed void InitialiseTyped()
@@ -139,19 +135,7 @@ namespace FunDBLib
         public void AddIndex<TFDIndexDefinition>(string name, Func<TTableDefinition, TFDIndexDefinition> funcGenerateIndex)
             where TFDIndexDefinition : struct
         {
-            var index = new FDIndex<TFDIndexDefinition, TTableDefinition>(funcGenerateIndex);
-
-            Indexes.Add(index);
-        }
-
-        internal FDIndex<TIndexDefinition, TTableDefinition> GetIndex<TIndexDefinition>()
-            where TIndexDefinition : struct
-        {
-            foreach (var index in Indexes)
-                if (index.IndexDefinitionType == typeof(TIndexDefinition))
-                    return index as FDIndex<TIndexDefinition, TTableDefinition>;
-
-            throw new Exception($"Index for {typeof(TIndexDefinition)} not found");
+            IndexController.Instance.AddIndex<TFDIndexDefinition, TTableDefinition>(name, funcGenerateIndex);
         }
 
         public void Add(TTableDefinition row)
@@ -189,15 +173,18 @@ namespace FunDBLib
                     maintainInstructions.Add(new IndexMaintainInstruction<TTableDefinition>(rowAction.Row, rowAction.RowAction, address));
                 }
 
-                Parallel.ForEach(Indexes, index =>
+                Parallel.ForEach(IndexController.Instance.GetIndexes<TTableDefinition>(), cachedIndex =>
                 {
+                    if (!cachedIndex.Loaded)
+                        return;
+
                     foreach (var instruction in maintainInstructions)
                         if (instruction.RowAction.RowActionType == EnumRowActionType.Update || instruction.RowAction.RowActionType == EnumRowActionType.Add)
-                            index.MaintainRowAddUpdate(instruction.Row, instruction.Address);
+                            cachedIndex.Index.MaintainRowAddUpdate(instruction.Row, instruction.Address);
                         else
-                            index.MaintainRowDelete(instruction.Address);
+                            cachedIndex.Index.MaintainRowDelete(instruction.Address);
 
-                    index.EndUpdate();
+                    cachedIndex.Index.EndUpdate();
                 });
             }
 

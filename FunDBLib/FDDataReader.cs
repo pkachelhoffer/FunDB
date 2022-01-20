@@ -43,7 +43,14 @@ namespace FunDBLib
         public TTableDefinition Seek<TIndexDefinition>(TIndexDefinition indexRow)
             where TIndexDefinition : struct
         {
-            var index = Table.GetIndex<TIndexDefinition>();
+            var cachedIndex = IndexController.Instance.GetIndex<TIndexDefinition, TTableDefinition>();
+            if (!cachedIndex.Loaded)
+            {
+                RefreshIndex(cachedIndex.Index);
+                IndexController.Instance.SetLoaded<TIndexDefinition, TTableDefinition>();
+            }
+
+            var index = cachedIndex.Index;
 
             var address = index.Seek(indexRow);
 
